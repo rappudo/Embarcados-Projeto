@@ -351,8 +351,6 @@ Data & Marco & Meta de conclusão \\
 O diagrama de Gantt a seguir apresenta a distribuição das atividades ao longo das semanas, com identificação das dependências entre tarefas e dos marcos de entrega.
 
 % ---- GANTT 1: Fases 1-3 ----
-% Largura útil landscape A4 com margens 3cm/2cm = 24.7cm
-% Rótulos ocupam ~5.5cm → barras têm ~19.2cm para 6 colunas → x unit = 3.2cm
 \begin{landscape}
 \centering
 \begin{ganttchart}[
@@ -367,7 +365,7 @@ O diagrama de Gantt a seguir apresenta a distribuição das atividades ao longo 
     group top shift=0.7,
     group height=.3,
     canvas/.append style={draw=black!20},
-    bar/.append style={fill=ganttblue!70},
+    % Estilos padrão
     group/.append style={fill=ganttgray!60, draw=black},
     milestone/.append style={fill=ganttred, draw=ganttred},
     title label font=\small,
@@ -384,35 +382,34 @@ O diagrama de Gantt a seguir apresenta a distribuição das atividades ao longo 
 \gantttitle{S4 08/abr}{1}\gantttitle{S5 15/abr}{1}\gantttitle{S6 22/abr}{1} \\
  
 \ganttgroup{Fase 1 -- Infraestrutura}{1}{3} \\
-\ganttbar[bar/.append style={fill=ganttblue!60}]{1.1 Toolchain C++}{1}{2} \\
-\ganttbar[bar/.append style={fill=ganttblue!60}]{1.2 PostgreSQL}{1}{1} \\
-\ganttbar[bar/.append style={fill=ganttblue!60}]{1.3 Projeto Rust}{1}{2} \\
-\ganttbar[bar/.append style={fill=ganttblue!60}]{1.4 Broker Mosquitto}{2}{2} \\
-\ganttbar[bar/.append style={fill=ganttblue!60}]{1.5 Ionic + Angular + PWA}{1}{2} \\
-\ganttbar[bar/.append style={fill=ganttblue!80}]{1.6 MQTT ponta a ponta}{3}{3} \\
+\ganttbar[bar/.append style={fill=blue!40}]{1.1 Toolchain C++}{1}{2} \\
+\ganttbar[bar/.append style={fill=blue!40}]{1.2 PostgreSQL}{1}{1} \\
+\ganttbar[bar/.append style={fill=blue!40}]{1.3 Projeto Rust}{1}{2} \\
+\ganttbar[bar/.append style={fill=blue!40}]{1.4 Broker Mosquitto}{2}{2} \\
+\ganttbar[bar/.append style={fill=blue!40}]{1.5 Ionic + Angular + PWA}{1}{2} \\
+\ganttbar[bar/.append style={fill=blue!70, draw=black}]{1.6 MQTT ponta a ponta}{3}{3} \\
  
 \ganttgroup{Fase 2 -- Visão Comp}{2}{5} \\
-\ganttbar[bar/.append style={fill=ganttgreen!60}]{2.1 Captura libcamera C++}{2}{2} \\
-\ganttbar[bar/.append style={fill=ganttgreen!60}]{2.2 Detecção ONNX}{3}{3} \\
-\ganttbar[bar/.append style={fill=ganttgreen!60}]{2.3 Alinhamento facial}{3}{4} \\
-\ganttbar[bar/.append style={fill=ganttgreen!60}]{2.4 Embedding MobileFace}{4}{4} \\
-\ganttbar[bar/.append style={fill=ganttgreen!80}]{2.5 Comparação + threshold}{4}{5} \\
-\ganttbar[bar/.append style={fill=ganttgreen!60}]{2.6 CLI de enrollment SQLite}{5}{5} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.1 Captura libcamera C++}{2}{2} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.2 Detecção ONNX}{3}{3} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.3 Alinhamento facial}{3}{4} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.4 Embedding MobileFace}{4}{4} \\
+\ganttbar[bar/.append style={fill=green!70, draw=black}]{2.5 Comparação + threshold}{4}{5} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.6 CLI de enrollment SQLite}{5}{5} \\
  
 \ganttgroup{Fase 3 -- Atuação Física}{5}{6} \\
-\ganttbar[bar/.append style={fill=ganttgreen!70}]{3.1 GPIO catraca}{5}{5} \\
-\ganttbar[bar/.append style={fill=ganttgreen!70}]{3.2 GPIO buzzer}{5}{5} \\
-\ganttbar[bar/.append style={fill=ganttgreen!70}]{3.3 Fila offline SQLite}{6}{6} \\
+\ganttbar[bar/.append style={fill=orange!60}]{3.1 GPIO catraca}{5}{5} \\
+\ganttbar[bar/.append style={fill=orange!60}]{3.2 GPIO buzzer}{5}{5} \\
+\ganttbar[bar/.append style={fill=orange!80, draw=black}]{3.3 Fila offline SQLite}{6}{6} \\
  
-\ganttmilestone{$\blacktriangledown$ Parcial 1 -- 40\%}{6}
+\ganttmilestone[milestone/.append style={fill=red}]{\(\blacktriangledown\) Parcial 1 -- 40\%}{6}
  
 \end{ganttchart}
-\captionof{figure}{Gantt -- Fases 1 a 3: infraestrutura, visão computacional e atuação física (S1--S6)}
+\captionof{figure}{Gantt -- Fases 1 a 3 organizada por cores (S1--S6)}
 \label{fig:gantt1}
 \end{landscape}
  
 % ---- GANTT 2: Fases 4-6 ----
-% 7 colunas → x unit = 19.2cm / 7 ≈ 2.7cm
 \begin{landscape}
 \centering
 \begin{ganttchart}[
@@ -427,9 +424,6 @@ O diagrama de Gantt a seguir apresenta a distribuição das atividades ao longo 
     group top shift=0.7,
     group height=.3,
     canvas/.append style={draw=black!20},
-    bar/.append style={fill=ganttblue!70},
-    group/.append style={fill=ganttgray!60, draw=black},
-    milestone/.append style={fill=ganttred, draw=ganttred},
     title label font=\small,
     bar label font=\small,
     group label font=\small\bfseries,
@@ -445,33 +439,33 @@ O diagrama de Gantt a seguir apresenta a distribuição das atividades ao longo 
 \gantttitle{S10 20/mai}{1}\gantttitle{S11 27/mai}{1} \\
  
 \ganttgroup{Fase 4 -- Backend Rust}{1}{6} \\
-\ganttbar[bar/.append style={fill=ganttblue!50}]{4.1 Schema banco}{1}{1} \\
-\ganttbar[bar/.append style={fill=ganttblue!50}]{4.2 Subscriber MQTT}{2}{2} \\
-\ganttbar[bar/.append style={fill=ganttblue!50}]{4.3 Auth JWT}{2}{3} \\
-\ganttbar[bar/.append style={fill=ganttblue!50}]{4.4 CRUD funcionários}{3}{4} \\
-\ganttbar[bar/.append style={fill=ganttblue!50}]{4.5 Sync embeddings Rasp}{4}{5} \\
-\ganttbar[bar/.append style={fill=ganttblue!50}]{4.6 Endpoints de analytics}{5}{6} \\
+\ganttbar[bar/.append style={fill=violet!40}]{4.1 Schema banco}{1}{1} \\
+\ganttbar[bar/.append style={fill=violet!40}]{4.2 Subscriber MQTT}{2}{2} \\
+\ganttbar[bar/.append style={fill=violet!40}]{4.3 Auth JWT}{2}{3} \\
+\ganttbar[bar/.append style={fill=violet!40}]{4.4 CRUD funcionários}{3}{4} \\
+\ganttbar[bar/.append style={fill=violet!40}]{4.5 Sync embeddings Rasp}{4}{5} \\
+\ganttbar[bar/.append style={fill=violet!70, draw=black}]{4.6 Endpoints de analytics}{5}{6} \\
  
 \ganttgroup{Fase 5 -- Frontend Ionic}{3}{6} \\
-\ganttbar[bar/.append style={fill=ganttblue!35}]{5.1 Tela de login JWT}{3}{4} \\
-\ganttbar[bar/.append style={fill=ganttblue!35}]{5.2 Tela de funcionários}{4}{5} \\
-\ganttbar[bar/.append style={fill=ganttblue!35}]{5.3 Histórico de eventos}{5}{6} \\
-\ganttbar[bar/.append style={fill=ganttblue!35}]{5.4 Dashboard + gráficos}{6}{6} \\
-\ganttbar[bar/.append style={fill=ganttblue!35}]{5.5 Analytics}{6}{6} \\
+\ganttbar[bar/.append style={fill=teal!40}]{5.1 Tela de login JWT}{3}{4} \\
+\ganttbar[bar/.append style={fill=teal!40}]{5.2 Tela de funcionários}{4}{5} \\
+\ganttbar[bar/.append style={fill=teal!40}]{5.3 Histórico de eventos}{5}{6} \\
+\ganttbar[bar/.append style={fill=teal!40}]{5.4 Dashboard + gráficos}{6}{6} \\
+\ganttbar[bar/.append style={fill=teal!40}]{5.5 Analytics}{6}{6} \\
  
-\ganttmilestone{$\blacktriangledown$ Parcial 2 -- 80\%}{6} \\
+\ganttmilestone[milestone/.append style={fill=red}]{\(\blacktriangledown\) Parcial 2 -- 80\%}{6} \\
  
 \ganttgroup{Fase 6 -- Integração}{6}{7} \\
-\ganttbar[bar/.append style={fill=ganttgray!70}]{6.1 Sync edge $\leftrightarrow$ backend}{6}{6} \\
-\ganttbar[bar/.append style={fill=ganttgray!70}]{6.2 Testes ponta a ponta}{6}{7} \\
-\ganttbar[bar/.append style={fill=ganttgray!70}]{6.3 Ajuste de threshold}{7}{7} \\
-\ganttbar[bar/.append style={fill=ganttgray!70}]{6.4 Documentação técnica}{7}{7} \\
-\ganttbar[bar/.append style={fill=ganttgray!70}]{6.5 Preparação da demo}{7}{7} \\
+\ganttbar[bar/.append style={fill=black!60}]{6.1 Sync edge \(\leftrightarrow\) backend}{6}{6} \\
+\ganttbar[bar/.append style={fill=black!60}]{6.2 Testes ponta a ponta}{6}{7} \\
+\ganttbar[bar/.append style={fill=black!60}]{6.3 Ajuste de threshold}{7}{7} \\
+\ganttbar[bar/.append style={fill=black!60}]{6.4 Documentação técnica}{7}{7} \\
+\ganttbar[bar/.append style={fill=black!60}]{6.5 Preparação da demo}{7}{7} \\
  
-\ganttmilestone{$\blacktriangledown$ Entrega Final}{7}
+\ganttmilestone[milestone/.append style={fill=red!80!black}]{\(\blacktriangledown\) Entrega Final}{7}
  
 \end{ganttchart}
-\captionof{figure}{Gantt -- Fases 4 a 6: backend, frontend e entrega final (S5--S11)}
+\captionof{figure}{Gantt -- Fases 4 a 6 organizada por cores (S5--S11)}
 \label{fig:gantt2}
 \end{landscape}
 
