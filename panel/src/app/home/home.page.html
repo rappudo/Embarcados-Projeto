@@ -1,20 +1,47 @@
 <ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>
-      Blank
-    </ion-title>
+  <ion-toolbar class="labor-header">
+    <div class="brand-row">
+      <div class="brand-mark">LS</div>
+      <div class="brand-copy">
+        <h1>LaborSync</h1>
+        <p>Modern workforce analytics and operational intelligence.</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <ion-button fill="clear" size="small">Dashboard</ion-button>
+      <ion-button fill="clear" size="small">Reports</ion-button>
+      <ion-button fill="clear" size="small">Alerts</ion-button>
+    </div>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <ion-header collapse="condense">
     <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
+      <ion-title size="large">LaborSync</ion-title>
     </ion-toolbar>
   </ion-header>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
-  </div>
+  <section class="hero-panel">
+    <div class="hero-copy">
+      <h2>Workforce metrics built for speed and clarity.</h2>
+      <p>Monitor productivity, attendance, and performance trends in a single intelligent dashboard.</p>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat-card">
+        <span>92.4%</span>
+        <small>Labor utilization</small>
+      </div>
+      <div class="stat-card">
+        <span>4.8</span>
+        <small>Avg. efficiency</small>
+      </div>
+      <div class="stat-card">
+        <span>27</span>
+        <small>Active alerts</small>
+      </div>
+    </div>
+  </section>
 </ion-content>
