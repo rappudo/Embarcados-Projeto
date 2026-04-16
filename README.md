@@ -43,3 +43,7 @@ Os modelos não estão no repositório. Baixe e coloque em `edge/models/`:
 ## Documentação
 
 O relatório completo está em `docs/main.tex`. Para compilar: `pdflatex docs/main.tex`.
+
+## Apresentação
+
+- **link do slide para as apresentações** [acesso](https://canva.link/5o6q6nqca953iau)
