@@ -1,31 +1,70 @@
-# ─── PDF gerados (manter só o .tex) ───
-*.pdf
-*.aux *.log *.toc *.lof *.lot *.out *.fls *.fdb_latexmk
+# ============================================================================
+# Build artifacts (C++)
+# ============================================================================
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.obj
+*.exe
 
-# ─── C++ / CMake ───
-edge/build/
-edge/CMakeCache.txt
-edge/CMakeFiles/
-*.o *.a *.so
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+Makefile
+CTestTestfile.cmake
+_deps/
+*.cmake.in.h
 
-# ─── Rust ───
-backend/target/
-
-# ─── Node / Ionic / Angular ───
-panel/node_modules/
-panel/.angular/
-panel/www/
-panel/dist/
-
-# ─── Variáveis de ambiente (nunca commitar segredos) ───
-.env
-.env.local
-backend/.env
-
-# ─── Modelos ONNX (binários grandes, usar Git LFS ou documentar download) ───
-*.onnx
-
-# ─── IDEs ───
+# ============================================================================
+# IDE / Editor
+# ============================================================================
 .vscode/
 .idea/
+.vs/
+.cache/
 *.swp
+*.swo
+*~
+.DS_Store
+
+# clangd
+.clangd/
+.cache/clangd/
+
+# ============================================================================
+# Runtime data (NÃO versionar)
+# ============================================================================
+# Config real de cada desenvolvedor (senhas, IPs locais)
+edge/config/config.toml
+
+# Modelos ONNX (grandes, baixados separadamente)
+edge/models/*.onnx
+
+# Banco de dados local (runtime)
+edge/cache.db
+edge/cache.db-journal
+edge/cache.db-wal
+edge/cache.db-shm
+edge/data/
+
+# Debug artifacts
+edge/debug_capture.jpg
+edge/*.log
+
+# ============================================================================
+# Python (scripts de debug ONNX)
+# ============================================================================
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# ============================================================================
+# Logs
+# ============================================================================
+*.log
