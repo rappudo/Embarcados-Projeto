@@ -115,6 +115,9 @@ ion-popover ion-item:hover {
   padding: 80px 48px;
   max-width: 1200px;
   margin: 0 auto;
+  opacity: 0;
+  transform: translateY(32px);
+  animation: fadeSlideIn 0.9s cubic-bezier(0.6,0.2,0.2,1) 0.1s forwards;
 }
 
 .about-title {
@@ -122,7 +125,78 @@ ion-popover ion-item:hover {
   font-weight: 600;
   color: #1f2937;
   margin: 0 0 32px;
-  text-align: left ;
+  text-align: left;
+  font-family: 'Ovelion Regular', sans-serif;
+}
+
+.produtos-title {
+  color: #000000;
+  letter-spacing: 1px;
+}
+
+.produtos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: #f8fafc;
+  border-radius: 18px;
+  box-shadow: 0 4px 18px -6px rgba(0,0,0,0.07);
+  padding: 32px 28px;
+}
+
+.produto-item {
+  padding: 0 0 18px 0;
+  opacity: 0;
+  transform: translateY(24px);
+  animation: fadeSlideIn 0.8s cubic-bezier(0.6,0.2,0.2,1) forwards;
+  animation-delay: 0.2s;
+}
+.produtos-list .produto-item:nth-child(1) { animation-delay: 0.15s; }
+.produtos-list .produto-item:nth-child(3) { animation-delay: 0.3s; }
+.produtos-list .produto-item:nth-child(5) { animation-delay: 0.45s; }
+.produtos-list .produto-item:nth-child(7) { animation-delay: 0.6s; }
+.produtos-list .produto-item:nth-child(9) { animation-delay: 0.75s; }
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.produto-nome {
+  font-family: 'Ovelion Regular', sans-serif;
+  font-size: 22px;
+  color: #2e7d32;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.produto-desc {
+  font-size: 15px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.7;
+  text-align: justify;
+}
+
+.produto-separador {
+  border: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, rgba(111,217,111,0.1) 0%, #6fd96f 50%, rgba(111,217,111,0.1) 100%);
+  margin: 0 0 18px 0;
+}
+
+@font-face {
+  font-family: 'Ovelion Regular';
+  src: url('/assets/Fonts/Ovelion Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
 }
 
 .about-content {

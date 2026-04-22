@@ -32,15 +32,36 @@
   </div>
 
   <nav class="home-navbar">
-    <button type="button" class="home-nav-link">Sobre Nós</button>
-    <button type="button" class="home-nav-link">Produtos</button>
-    <button type="button" class="home-nav-link">Contate-nos</button>
+    <button
+      type="button"
+      class="home-nav-link"
+      [class.active-nav-link]="activeSection === 'about'"
+      (click)="setSection('about')"
+    >
+      Sobre Nós
+    </button>
+    <button
+      type="button"
+      class="home-nav-link"
+      [class.active-nav-link]="activeSection === 'produtos'"
+      (click)="setSection('produtos')"
+    >
+      Produtos
+    </button>
+    <button
+      type="button"
+      class="home-nav-link"
+      [class.active-nav-link]="activeSection === 'contato'"
+      (click)="setSection('contato')"
+    >
+      Contate-nos
+    </button>
   </nav>
 
   <hr class="section-separator" />
 
-  <section class="about-section">
-    <h2 class="about-title">Sobre Nós</h2>
+  <section *ngIf="activeSection === 'about'" class="about-section carousel-section">
+    <h2 #aboutTitle class="about-title">Sobre Nós</h2>
     <div class="about-content">
       <p class="about-text">
         Somos uma empresa especializada no desenvolvimento de sistemas e equipamentos de reconhecimento facial para controle de acesso corporativo.
@@ -61,6 +82,60 @@
           alt="Catraca com reconhecimento facial"
         />
       </div>
+    </div>
+  </section>
+
+  <section *ngIf="activeSection === 'produtos'" class="about-section carousel-section">
+      <h2 #produtosTitle class="about-title produtos-title">Produtos</h2>
+      <div class="produtos-list">
+        <div class="produto-item">
+          <h3 class="produto-nome">Catraca com Reconhecimento Facial Integrado</h3>
+          <p class="produto-desc">
+            Equipamento robusto para controle de acesso em ambientes corporativos. Combina identificação facial de alta precisão com liberação automática de entrada, garantindo segurança e fluidez no fluxo de pessoas. Permite marcações rápidas e seguras de entrada, saída e intervalos, eliminando fraudes e reduzindo filas.
+          </p>
+        </div>
+        <hr class="produto-separador" />
+        <div class="produto-item">
+          <h3 class="produto-nome">Plataforma de Dashboard e Analytics</h3>
+          <p class="produto-desc">
+            Sistema web completo para monitoramento em tempo real. Apresenta dados organizados sobre presença, atrasos, horas trabalhadas e fluxo de pessoas, com relatórios detalhados para gestão estratégica.
+          </p>
+        </div>
+        <hr class="produto-separador" />
+        <div class="produto-item">
+          <h3 class="produto-nome">Sistema de Gestão de Acesso e Permissões</h3>
+          <p class="produto-desc">
+            Software para configuração de regras de acesso por horários, setores e níveis hierárquicos. Proporciona controle total sobre quem pode acessar cada área da empresa.
+          </p>
+        </div>
+        <hr class="produto-separador" />
+        <div class="produto-item">
+          <h3 class="produto-nome">Módulo Antifraude com Detecção de Vivacidade</h3>
+          <p class="produto-desc">
+            Tecnologia avançada que impede tentativas de fraude por meio de fotos, vídeos ou máscaras. Garante que apenas pessoas reais sejam autenticadas.
+          </p>
+        </div>
+        <hr class="produto-separador" />
+        <div class="produto-item">
+          <h3 class="produto-nome">Aplicativo Mobile para Gestão</h3>
+          <p class="produto-desc">
+            Aplicativo que oferece aos gestores acesso remoto a informações em tempo real. Permite acompanhar registros, gerar relatórios e gerenciar equipes de forma prática.
+          </p>
+        </div>
+      </div>
+  </section>
+
+  <section *ngIf="activeSection === 'contato'" class="about-section carousel-section">
+    <h2 #contatoTitle class="about-title">Contate-nos</h2>
+    <div class="about-content">
+      <p class="about-text">
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque
+        euismod, nisi eu consectetur consectetur, nisl nisi consectetur nisi,
+        euismod euismod nisi nisi euismod. Vivamus luctus urna sed urna ultricies
+        ac tempor dui sagittis. In condimentum facilisis porta. Sed nec diam eu
+        diam mattis viverra. Nulla fringilla, orci ac euismod semper, magna diam
+        porttitor mauris, quis sollicitudin sapien justo in libero.
+      </p>
     </div>
   </section>
 
