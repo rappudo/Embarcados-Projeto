@@ -1,6 +1,7 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import {
   IonContent,
   IonButton,
@@ -20,6 +21,7 @@ type HomeSection = 'about' | 'produtos' | 'contato';
   imports: [
     CommonModule,
     FormsModule,
+    RouterLink,
     IonContent,
     IonButton,
     IonIcon,
