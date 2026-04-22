@@ -1,187 +1,47 @@
-<ion-content fullscreen>
-  <ion-button id="profile-burger" class="profile-burger-button">
-    <ion-icon slot="icon-only" src="/assets/icon/Profile.svg"></ion-icon>
-  </ion-button>
-
-  <ion-popover trigger="profile-burger" dismiss-on-select="true" side="bottom" alignment="end">
-    <ng-template>
-      <ion-content>
-        <ion-list lines="none">
-          <ion-item button detail="false">
-            <ion-label>Perfil</ion-label>
-          </ion-item>
-          <ion-item button detail="false" routerLink="/dashboard">
-            <ion-label>Dashboard</ion-label>
-          </ion-item>
-          <ion-item button detail="false">
-            <ion-label>Cadastro</ion-label>
-          </ion-item>
-          <ion-item button detail="false">
-            <ion-label>Login</ion-label>
-          </ion-item>
-        </ion-list>
-      </ion-content>
-    </ng-template>
-  </ion-popover>
-
-  <div class="home-splash">
-    <div class="logo-container">
-      <h1>Face<span class="gate">Gate</span></h1>
-      <p>Segurança inteligente no seu fluxo</p>
+<ion-header [translucent]="true">
+  <ion-toolbar class="labor-header">
+    <div class="brand-row">
+      <div class="brand-mark">LS</div>
+      <div class="brand-copy">
+        <h1>LaborSync</h1>
+        <p>Modern workforce analytics and operational intelligence.</p>
+      </div>
     </div>
-  </div>
 
-  <nav class="home-navbar">
-    <button
-      type="button"
-      class="home-nav-link"
-      [class.active-nav-link]="activeSection === 'about'"
-      (click)="setSection('about')"
-    >
-      Sobre Nós
-    </button>
-    <button
-      type="button"
-      class="home-nav-link"
-      [class.active-nav-link]="activeSection === 'produtos'"
-      (click)="setSection('produtos')"
-    >
-      Produtos
-    </button>
-    <button
-      type="button"
-      class="home-nav-link"
-      [class.active-nav-link]="activeSection === 'contato'"
-      (click)="setSection('contato')"
-    >
-      Contate-nos
-    </button>
-  </nav>
+    <div class="header-actions">
+      <ion-button fill="clear" size="small">Dashboard</ion-button>
+      <ion-button fill="clear" size="small">Reports</ion-button>
+      <ion-button fill="clear" size="small">Alerts</ion-button>
+    </div>
+  </ion-toolbar>
+</ion-header>
 
-  <hr class="section-separator" />
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large">LaborSync</ion-title>
+    </ion-toolbar>
+  </ion-header>
 
-  <section *ngIf="activeSection === 'about'" class="about-section carousel-section">
-    <h2 #aboutTitle class="about-title">Sobre Nós</h2>
-    <div class="about-content">
-      <p class="about-text">
-        Somos uma empresa especializada no desenvolvimento de sistemas e equipamentos de reconhecimento facial para controle de acesso corporativo.
-        Oferecemos soluções completas que integram hardware e software com alta precisão e confiabilidade.
-        Nossos dispositivos operam em catracas inteligentes, garantindo segurança e agilidade no fluxo de pessoas.
-        Desenvolvemos dashboards intuitivos que permitem o monitoramento em tempo real de entradas, saídas e intervalos.
-        As informações são organizadas de forma clara para facilitar a gestão de jornada e tomada de decisões.
-        Priorizamos a privacidade e a proteção de dados, seguindo boas práticas e normas vigentes.<br>
-        Nossas soluções são escaláveis e adaptáveis a empresas de diferentes portes e segmentos.
-        Buscamos constantemente inovação tecnológica para oferecer desempenho e estabilidade superiores.
-        Trabalhamos com foco em eficiência operacional e redução de fraudes no controle de ponto.
-        Nosso compromisso é entregar soluções seguras, precisas e alinhadas às necessidades dos nossos clientes.
-      </p>
-      <div class="about-image-wrapper">
-        <img
-          class="about-image"
-          src="/assets/Images/Turnstile_Facial_Recognition.jpg"
-          alt="Catraca com reconhecimento facial"
-        />
+  <section class="hero-panel">
+    <div class="hero-copy">
+      <h2>Workforce metrics built for speed and clarity.</h2>
+      <p>Monitor productivity, attendance, and performance trends in a single intelligent dashboard.</p>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat-card">
+        <span>92.4%</span>
+        <small>Labor utilization</small>
+      </div>
+      <div class="stat-card">
+        <span>4.8</span>
+        <small>Avg. efficiency</small>
+      </div>
+      <div class="stat-card">
+        <span>27</span>
+        <small>Active alerts</small>
       </div>
     </div>
   </section>
-
-  <section *ngIf="activeSection === 'produtos'" class="about-section carousel-section">
-      <h2 #produtosTitle class="about-title produtos-title">Produtos</h2>
-      <div class="produtos-list">
-        <div class="produto-item">
-          <h3 class="produto-nome">Catraca com Reconhecimento Facial Integrado</h3>
-          <p class="produto-desc">
-            Equipamento robusto para controle de acesso em ambientes corporativos. Combina identificação facial de alta precisão com liberação automática de entrada, garantindo segurança e fluidez no fluxo de pessoas. Permite marcações rápidas e seguras de entrada, saída e intervalos, eliminando fraudes e reduzindo filas.
-          </p>
-        </div>
-        <hr class="produto-separador" />
-        <div class="produto-item">
-          <h3 class="produto-nome">Plataforma de Dashboard e Analytics</h3>
-          <p class="produto-desc">
-            Sistema web completo para monitoramento em tempo real. Apresenta dados organizados sobre presença, atrasos, horas trabalhadas e fluxo de pessoas, com relatórios detalhados para gestão estratégica.
-          </p>
-        </div>
-        <hr class="produto-separador" />
-        <div class="produto-item">
-          <h3 class="produto-nome">Sistema de Gestão de Acesso e Permissões</h3>
-          <p class="produto-desc">
-            Software para configuração de regras de acesso por horários, setores e níveis hierárquicos. Proporciona controle total sobre quem pode acessar cada área da empresa.
-          </p>
-        </div>
-        <hr class="produto-separador" />
-        <div class="produto-item">
-          <h3 class="produto-nome">Módulo Antifraude com Detecção de Vivacidade</h3>
-          <p class="produto-desc">
-            Tecnologia avançada que impede tentativas de fraude por meio de fotos, vídeos ou máscaras. Garante que apenas pessoas reais sejam autenticadas.
-          </p>
-        </div>
-        <hr class="produto-separador" />
-        <div class="produto-item">
-          <h3 class="produto-nome">Aplicativo Mobile para Gestão</h3>
-          <p class="produto-desc">
-            Aplicativo que oferece aos gestores acesso remoto a informações em tempo real. Permite acompanhar registros, gerar relatórios e gerenciar equipes de forma prática.
-          </p>
-        </div>
-      </div>
-  </section>
-
-  <section *ngIf="activeSection === 'contato'" class="about-section carousel-section">
-    <h2 #contatoTitle class="about-title">Contate-nos</h2>
-    <div class="contato-content">
-      <div class="contato-info">
-        <div class="contato-info-group">
-          <h3 class="contato-info-title">SAC</h3>
-          <ul class="contato-info-list">
-            <li><span class="contato-info-label">Capitais:</span> 4004-1234</li>
-            <li><span class="contato-info-label">Outras Regiões:</span> 0800 123 4567</li>
-          </ul>
-        </div>
-        <div class="contato-info-group">
-          <h3 class="contato-info-title">E-Mail</h3>
-          <p class="contato-info-email">facegate&#64;support.com</p>
-        </div>
-      </div>
-
-      <form class="contato-form" (ngSubmit)="submitContact()" #contatoForm="ngForm">
-        <label class="contato-field">
-          <span class="contato-field-label">Seu e-mail</span>
-          <input
-            type="email"
-            name="contactEmail"
-            class="contato-input"
-            placeholder="exemplo@exemplo.com"
-            [(ngModel)]="contactEmail"
-          />
-        </label>
-
-        <label class="contato-field">
-          <span class="contato-field-label"> Seu Telefone</span>
-          <input
-            type="tel"
-            name="contactPhone"
-            class="contato-input"
-            placeholder="(00) 12345-6789"
-            [(ngModel)]="contactPhone"
-          />
-        </label>
-
-        <label class="contato-field">
-          <span class="contato-field-label">Mensagem</span>
-          <textarea
-            name="contactMessage"
-            class="contato-input contato-textarea"
-            placeholder="Digite sua mensagem"
-            [(ngModel)]="contactMessage"
-          ></textarea>
-        </label>
-
-        <button type="submit" class="contato-submit">Enviar</button>
-      </form>
-    </div>
-  </section>
-
-  <footer class="footer">
-    <span class="footer-logo">FaceGate</span>
-    <span class="footer-copyright">© 2026 FaceGate. All rights reserved.</span>
-  </footer>
 </ion-content>

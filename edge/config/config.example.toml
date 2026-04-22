@@ -1,0 +1,84 @@
+# FaceGateway — configuração do dispositivo edge.
+# Copie este arquivo para config.toml e ajuste os valores para o seu ambiente.
+# O binário é invocado com: ./facegate --config /caminho/para/config.toml
+
+# Identificador único deste dispositivo. Aparece em todos os eventos publicados.
+# Convenção sugerida: "rpi-<local>-<numero>", ex: "rpi-entrance-01".
+device_id = "rpi-entrance-01"
+
+# -----------------------------------------------------------------------------
+# Visão computacional
+# -----------------------------------------------------------------------------
+[vision]
+# Limiar de distância de cosseno para decidir match. Calibrar empiricamente.
+# Valor inicial de referência: 0.45.
+threshold = 0.45
+
+# Paths dos modelos ONNX. Relativos ao CWD do processo ou absolutos.
+blazeface_model = "models/blazeface.onnx"
+mobilefacenet_model = "models/mobilefacenet.onnx"
+
+# Número de threads usadas pelo ONNXRuntime.
+# Raspberry Pi 4 tem 4 cores — 2 threads deixa cores livres para o resto do pipeline.
+onnx_threads = 2
+
+# -----------------------------------------------------------------------------
+# Câmera
+# -----------------------------------------------------------------------------
+[camera]
+# Device da câmera. Em Raspberry Pi com câmera CSI normalmente é /dev/video0.
+device = "/dev/video0"
+
+# Resolução da captura. 640x480 é o sweet spot: detecção confiável e latência baixa.
+width = 640
+height = 480
+
+# Frames por segundo da captura.
+fps = 30
+
+# -----------------------------------------------------------------------------
+# GPIO — atuadores físicos
+# -----------------------------------------------------------------------------
+[gpio]
+# Numeração BCM (Broadcom). Ver pinout.xyz para a placa.
+relay_pin = 17
+buzzer_pin = 27
+
+# Duração do pulso que aciona o relé da catraca, em milissegundos.
+relay_pulse_ms = 1500
+
+# Duração do beep do buzzer em acesso negado/desconhecido, em milissegundos.
+buzzer_beep_ms = 300
+
+# -----------------------------------------------------------------------------
+# Armazenamento local
+# -----------------------------------------------------------------------------
+[storage]
+# Path do arquivo SQLite (cache de embeddings + fila offline de eventos).
+# Em produção na Raspberry, recomendado: /var/lib/facegate/cache.db
+sqlite_path = "/var/lib/facegate/cache.db"
+
+# -----------------------------------------------------------------------------
+# MQTT — comunicação com o backend
+# -----------------------------------------------------------------------------
+[mqtt]
+# Endereço do broker Mosquitto. Usar IP ou hostname resolvível pela Raspberry.
+broker_host = "192.168.1.100"
+broker_port = 1883
+
+# Identificador único no broker. Por convenção, mesmo valor de device_id.
+client_id = "rpi-entrance-01"
+
+# Keepalive MQTT em segundos. O broker marca o cliente como offline após esse tempo sem ping.
+keepalive_seconds = 60
+
+# Intervalo entre heartbeats publicados no tópico facegate/health.
+heartbeat_interval_seconds = 30
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+[logging]
+# Níveis aceitos: trace, debug, info, warn, error.
+# Em produção: "info". Em desenvolvimento/debug: "debug" ou "trace".
+level = "info"

@@ -1,0 +1,59 @@
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <filesystem>
+
+namespace facegate::config {
+
+struct VisionConfig {
+    float threshold;
+    std::string blazeface_model;
+    std::string mobilefacenet_model;
+    int onnx_threads;
+};
+
+struct CameraConfig {
+    std::string device;
+    int width;
+    int height;
+    int fps;
+};
+
+struct GpioConfig {
+    bool enabled;
+    int relay_pin;
+    int buzzer_pin;
+    int relay_pulse_ms;
+    int buzzer_beep_ms;
+};
+
+struct StorageConfig {
+    std::string sqlite_path;
+};
+
+struct MqttConfig {
+    std::string broker_host;
+    int broker_port;
+    std::string client_id;
+    int keepalive_seconds;
+    int heartbeat_interval_seconds;
+};
+
+struct LoggingConfig {
+    std::string level;
+};
+
+struct Config {
+    std::string device_id;
+    VisionConfig vision;
+    CameraConfig camera;
+    GpioConfig gpio;
+    StorageConfig storage;
+    MqttConfig mqtt;
+    LoggingConfig logging;
+};
+
+Config load_config(const std::filesystem::path& path);
+
+}  // namespace facegate::config
