@@ -1,5 +1,6 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   IonContent,
   IonButton,
@@ -18,6 +19,7 @@ type HomeSection = 'about' | 'produtos' | 'contato';
   styleUrls: ['home.page.scss'],
   imports: [
     CommonModule,
+    FormsModule,
     IonContent,
     IonButton,
     IonIcon,
@@ -29,6 +31,16 @@ type HomeSection = 'about' | 'produtos' | 'contato';
 })
 export class HomePage {
   activeSection: HomeSection = 'about';
+
+  contactEmail = '';
+  contactPhone = '';
+  contactMessage = '';
+
+  submitContact() {
+    this.contactEmail = '';
+    this.contactPhone = '';
+    this.contactMessage = '';
+  }
 
   @ViewChild(IonContent) private content!: IonContent;
   @ViewChild('aboutTitle', { read: ElementRef }) private aboutTitle!: ElementRef<HTMLElement>;

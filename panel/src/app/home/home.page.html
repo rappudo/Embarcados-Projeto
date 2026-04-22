@@ -127,15 +127,56 @@
 
   <section *ngIf="activeSection === 'contato'" class="about-section carousel-section">
     <h2 #contatoTitle class="about-title">Contate-nos</h2>
-    <div class="about-content">
-      <p class="about-text">
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque
-        euismod, nisi eu consectetur consectetur, nisl nisi consectetur nisi,
-        euismod euismod nisi nisi euismod. Vivamus luctus urna sed urna ultricies
-        ac tempor dui sagittis. In condimentum facilisis porta. Sed nec diam eu
-        diam mattis viverra. Nulla fringilla, orci ac euismod semper, magna diam
-        porttitor mauris, quis sollicitudin sapien justo in libero.
-      </p>
+    <div class="contato-content">
+      <div class="contato-info">
+        <div class="contato-info-group">
+          <h3 class="contato-info-title">SAC</h3>
+          <ul class="contato-info-list">
+            <li><span class="contato-info-label">Capitais:</span> 4004-1234</li>
+            <li><span class="contato-info-label">Outras Regiões:</span> 0800 123 4567</li>
+          </ul>
+        </div>
+        <div class="contato-info-group">
+          <h3 class="contato-info-title">E-Mail</h3>
+          <p class="contato-info-email">facegate&#64;support.com</p>
+        </div>
+      </div>
+
+      <form class="contato-form" (ngSubmit)="submitContact()" #contatoForm="ngForm">
+        <label class="contato-field">
+          <span class="contato-field-label">Seu e-mail</span>
+          <input
+            type="email"
+            name="contactEmail"
+            class="contato-input"
+            placeholder="exemplo@exemplo.com"
+            [(ngModel)]="contactEmail"
+          />
+        </label>
+
+        <label class="contato-field">
+          <span class="contato-field-label"> Seu Telefone</span>
+          <input
+            type="tel"
+            name="contactPhone"
+            class="contato-input"
+            placeholder="(00) 12345-6789"
+            [(ngModel)]="contactPhone"
+          />
+        </label>
+
+        <label class="contato-field">
+          <span class="contato-field-label">Mensagem</span>
+          <textarea
+            name="contactMessage"
+            class="contato-input contato-textarea"
+            placeholder="Digite sua mensagem"
+            [(ngModel)]="contactMessage"
+          ></textarea>
+        </label>
+
+        <button type="submit" class="contato-submit">Enviar</button>
+      </form>
     </div>
   </section>
 
