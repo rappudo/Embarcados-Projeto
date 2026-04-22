@@ -2,7 +2,9 @@
   "funcionarios": [
     {
       "id": 1,
-      "nome": "Funcionario 1",
+      "nome": "Carlos Silva",
+      "idade": 32,
+      "dataIngresso": "2022-03-15",
       "turno": "Tarde",
       "perfil": "Atrasado",
       "registros": [
@@ -703,7 +705,9 @@
     },
     {
       "id": 2,
-      "nome": "Funcionario 2",
+      "nome": "Fernanda Costa",
+      "idade": 28,
+      "dataIngresso": "2021-07-08",
       "turno": "Noite",
       "perfil": "Workaholic",
       "registros": [
@@ -1457,7 +1461,9 @@
     },
     {
       "id": 3,
-      "nome": "Funcionario 3",
+      "nome": "João Pereira",
+      "idade": 41,
+      "dataIngresso": "2019-11-22",
       "turno": "Manhã",
       "perfil": "Irregular",
       "registros": [
@@ -2134,7 +2140,9 @@
     },
     {
       "id": 4,
-      "nome": "Funcionario 4",
+      "nome": "Ana Souza",
+      "idade": 26,
+      "dataIngresso": "2023-02-01",
       "turno": "Tarde",
       "perfil": "Pontual",
       "registros": [
@@ -2851,7 +2859,9 @@
     },
     {
       "id": 5,
-      "nome": "Funcionario 5",
+      "nome": "Lucas Martins",
+      "idade": 35,
+      "dataIngresso": "2020-09-10",
       "turno": "Noite",
       "perfil": "Atrasado",
       "registros": [

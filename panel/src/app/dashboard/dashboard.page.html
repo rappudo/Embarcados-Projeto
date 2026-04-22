@@ -1,13 +1,64 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>dashboard</ion-title>
+<ion-header class="dashboard-header">
+  <ion-toolbar class="dashboard-toolbar">
+    <h1 class="dashboard-logo">Face<span>Gate</span></h1>
+    <ion-button slot="end" fill="clear" class="dashboard-profile-btn">
+      <ion-icon slot="icon-only" name="person-circle-outline"></ion-icon>
+    </ion-button>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">dashboard</ion-title>
-    </ion-toolbar>
-  </ion-header>
+<ion-content class="dashboard-content">
+  <section class="dashboard-main">
+    <header class="dashboard-page-header">
+      <h2 class="dashboard-title">Dashboard</h2>
+      <p class="dashboard-subtitle">
+        Pesquise e filtre registros de acesso.
+      </p>
+    </header>
+
+    <div class="dashboard-filters">
+      <ion-select
+        placeholder="Filtrar Turno"
+        interface="popover"
+        class="dashboard-select"
+      >
+        <ion-select-option value="todos">Todos</ion-select-option>
+        <ion-select-option value="manha">Manhã</ion-select-option>
+        <ion-select-option value="tarde">Tarde</ion-select-option>
+        <ion-select-option value="noite">Noite</ion-select-option>
+      </ion-select>
+
+      <div class="dashboard-search-wrapper">
+        <ion-searchbar
+          placeholder="Buscar funcionário..."
+          [(ngModel)]="searchTerm"
+          (ionInput)="filtrarFuncionarios()"
+          class="dashboard-searchbar"
+        ></ion-searchbar>
+
+        <ul
+          *ngIf="funcionariosFiltrados.length > 0"
+          class="dashboard-search-dropdown"
+        >
+          <li
+            *ngFor="let f of funcionariosFiltrados"
+            class="dashboard-search-option"
+            (click)="selecionarFuncionario(f)"
+          >
+            {{ f.nome }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <app-employee-card
+      *ngIf="selectedFuncionario"
+      [nome]="selectedFuncionario.nome"
+      [idade]="selectedFuncionario.idade"
+      [dataIngresso]="selectedFuncionario.dataIngresso"
+    ></app-employee-card>
+      <div *ngIf="!selectedFuncionario" class="dashboard-select-message">
+        Selecione um funcionário para vizualisar a análise
+      </div>
+  </section>
 </ion-content>
