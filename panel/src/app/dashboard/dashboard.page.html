@@ -21,11 +21,13 @@
         placeholder="Filtrar Turno"
         interface="popover"
         class="dashboard-select"
+        [(ngModel)]="selectedTurno"
+        (ionChange)="onTurnoChange()"
       >
-        <ion-select-option value="todos">Todos</ion-select-option>
-        <ion-select-option value="manha">Manhã</ion-select-option>
-        <ion-select-option value="tarde">Tarde</ion-select-option>
-        <ion-select-option value="noite">Noite</ion-select-option>
+        <ion-select-option [value]="null">Todos</ion-select-option>
+        <ion-select-option *ngFor="let t of turnos" [value]="t">
+          {{ t }}
+        </ion-select-option>
       </ion-select>
 
       <div class="dashboard-search-wrapper">

@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import {
   IonButton,
   IonContent,
@@ -14,9 +15,16 @@ import {
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
 
 interface Funcionario {
+  id: number;
   nome: string;
   idade: number;
   dataIngresso: string;
+  turno: string;
+  perfil: string;
+}
+
+interface HorariosPontoMock {
+  funcionarios: Funcionario[];
 }
 
 @Component({
@@ -38,31 +46,47 @@ interface Funcionario {
     EmployeeCardComponent,
   ],
 })
-export class DashboardPage {
+export class DashboardPage implements OnInit {
+  private http = inject(HttpClient);
+
   searchTerm = '';
+  selectedTurno: string | null = null;
   selectedFuncionario: Funcionario | null = null;
+
+  funcionarios: Funcionario[] = [];
+  turnos: string[] = [];
   funcionariosFiltrados: Funcionario[] = [];
 
-  funcionarios: Funcionario[] = [
-    { nome: 'Carlos Silva', idade: 32, dataIngresso: '2022-03-15' },
-    { nome: 'Fernanda Costa', idade: 28, dataIngresso: '2021-07-08' },
-    { nome: 'João Pereira', idade: 41, dataIngresso: '2019-11-22' },
-    { nome: 'Ana Souza', idade: 26, dataIngresso: '2023-02-01' },
-    { nome: 'Lucas Martins', idade: 35, dataIngresso: '2020-09-10' },
-  ];
+  ngOnInit(): void {
+    this.http
+      .get<HorariosPontoMock>('assets/mock_data_jsons/horarios_ponto.json')
+      .subscribe((data) => {
+        this.funcionarios = data.funcionarios;
+        this.turnos = [...new Set(data.funcionarios.map((f) => f.turno))].sort();
+      });
+  }
 
-  filtrarFuncionarios() {
+  filtrarFuncionarios(): void {
     const termo = this.searchTerm.trim().toLowerCase();
     if (!termo) {
       this.funcionariosFiltrados = [];
       return;
     }
-    this.funcionariosFiltrados = this.funcionarios.filter((f) =>
-      f.nome.toLowerCase().includes(termo),
-    );
+    this.funcionariosFiltrados = this.funcionarios.filter((f) => {
+      const matchNome = f.nome.toLowerCase().includes(termo);
+      const matchTurno = !this.selectedTurno || f.turno === this.selectedTurno;
+      return matchNome && matchTurno;
+    });
   }
 
-  selecionarFuncionario(f: Funcionario) {
+  onTurnoChange(): void {
+    if (this.selectedFuncionario && this.selectedTurno && this.selectedFuncionario.turno !== this.selectedTurno) {
+      this.selectedFuncionario = null;
+    }
+    this.filtrarFuncionarios();
+  }
+
+  selecionarFuncionario(f: Funcionario): void {
     this.selectedFuncionario = f;
     this.searchTerm = '';
     this.funcionariosFiltrados = [];
