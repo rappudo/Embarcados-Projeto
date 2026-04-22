@@ -1,10 +1,3 @@
-// Mensagem de seleção de funcionário
-.dashboard-select-message {
-  color: var(--text-muted);
-  font-size: 17px;
-  text-align: center;
-  margin-top: 32px;
-}
 :host {
   --primary: #6fd96f;
   --primary-strong: #2e7d32;
@@ -50,13 +43,86 @@
   --color: var(--text);
 }
 
-.dashboard-main {
-  max-width: 1200px;
+.dashboard-layout {
+  display: flex;
+  min-height: 100%;
+  align-items: stretch;
+}
+
+.dashboard-sidebar {
+  flex: 0 0 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 12px;
+  box-shadow: 1px 0 3px rgba(0, 0, 0, 0.03);
+}
+
+.dashboard-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 24px;
+}
+
+.dashboard-nav-item {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dashboard-nav-item:hover {
+  background: #f3f4f6;
+  color: var(--primary);
+}
+
+.dashboard-nav-item.active {
+  background: rgba(111, 217, 111, 0.15);
+  color: var(--primary-strong);
+  font-weight: 600;
+}
+
+.dashboard-nav-icon {
+  font-size: 18px;
+}
+
+.dashboard-body {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 32px 48px;
+}
+
+.dashboard-view {
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 32px 24px 48px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  opacity: 0;
+  transform: translateY(32px);
+  animation: fadeSlideIn 0.9s cubic-bezier(0.6, 0.2, 0.2, 1) 0.1s forwards;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dashboard-page-header {
@@ -147,6 +213,41 @@
   &:hover {
     background: rgba(111, 217, 111, 0.12);
     color: var(--primary-strong);
+  }
+}
+
+.dashboard-select-message {
+  color: var(--text-muted);
+  font-size: 17px;
+  text-align: center;
+  margin-top: 32px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .dashboard-sidebar {
+    flex: 0 0 auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 12px;
+  }
+
+  .dashboard-nav {
+    flex-direction: row;
+    gap: 6px;
+    position: static;
+    overflow-x: auto;
+  }
+
+  .dashboard-nav-item {
+    flex: 0 0 auto;
+  }
+
+  .dashboard-body {
+    padding: 24px 16px 40px;
   }
 }
 

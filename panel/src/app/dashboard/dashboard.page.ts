@@ -27,6 +27,8 @@ interface HorariosPontoMock {
   funcionarios: Funcionario[];
 }
 
+type DashboardTab = 'dashboard' | 'funcionarios';
+
 @Component({
   selector: 'app-dashboard',
   templateUrl: './dashboard.page.html',
@@ -49,6 +51,8 @@ interface HorariosPontoMock {
 export class DashboardPage implements OnInit {
   private http = inject(HttpClient);
 
+  activeTab: DashboardTab = 'dashboard';
+
   searchTerm = '';
   selectedTurno: string | null = null;
   selectedFuncionario: Funcionario | null = null;
@@ -66,6 +70,10 @@ export class DashboardPage implements OnInit {
       });
   }
 
+  setTab(tab: DashboardTab): void {
+    this.activeTab = tab;
+  }
+
   filtrarFuncionarios(): void {
     const termo = this.searchTerm.trim().toLowerCase();
     if (!termo) {
@@ -80,7 +88,11 @@ export class DashboardPage implements OnInit {
   }
 
   onTurnoChange(): void {
-    if (this.selectedFuncionario && this.selectedTurno && this.selectedFuncionario.turno !== this.selectedTurno) {
+    if (
+      this.selectedFuncionario &&
+      this.selectedTurno &&
+      this.selectedFuncionario.turno !== this.selectedTurno
+    ) {
       this.selectedFuncionario = null;
     }
     this.filtrarFuncionarios();
