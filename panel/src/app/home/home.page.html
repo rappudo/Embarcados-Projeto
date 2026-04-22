@@ -1,12 +1,71 @@
-<ion-header>
-  <ion-toolbar>
-    <ion-title>Home</ion-title>
-  </ion-toolbar>
-</ion-header>
-
 <ion-content fullscreen>
+  <ion-button id="profile-burger" class="profile-burger-button">
+    <ion-icon slot="icon-only" src="/assets/icon/Profile.svg"></ion-icon>
+  </ion-button>
+
+  <ion-popover trigger="profile-burger" dismiss-on-select="true" side="bottom" alignment="end">
+    <ng-template>
+      <ion-content>
+        <ion-list lines="none">
+          <ion-item button detail="false">
+            <ion-label>Perfil</ion-label>
+          </ion-item>
+          <ion-item button detail="false">
+            <ion-label>Dashboard</ion-label>
+          </ion-item>
+          <ion-item button detail="false">
+            <ion-label>Cadastro</ion-label>
+          </ion-item>
+          <ion-item button detail="false">
+            <ion-label>Login</ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-content>
+    </ng-template>
+  </ion-popover>
+
   <div class="home-splash">
-    <h1>FaceGate</h1>
-    <p>Reconhecimento Facial e Gerenciamento</p>
+    <div class="logo-container">
+      <h1>Face<span class="gate">Gate</span></h1>
+      <p>Segurança inteligente no seu fluxo</p>
+    </div>
   </div>
+
+  <nav class="home-navbar">
+    <button type="button" class="home-nav-link">Sobre Nós</button>
+    <button type="button" class="home-nav-link">Produtos</button>
+    <button type="button" class="home-nav-link">Contate-nos</button>
+  </nav>
+
+  <hr class="section-separator" />
+
+  <section class="about-section">
+    <h2 class="about-title">Sobre Nós</h2>
+    <div class="about-content">
+      <p class="about-text">
+        Somos uma empresa especializada no desenvolvimento de sistemas e equipamentos de reconhecimento facial para controle de acesso corporativo.
+        Oferecemos soluções completas que integram hardware e software com alta precisão e confiabilidade.
+        Nossos dispositivos operam em catracas inteligentes, garantindo segurança e agilidade no fluxo de pessoas.
+        Desenvolvemos dashboards intuitivos que permitem o monitoramento em tempo real de entradas, saídas e intervalos.
+        As informações são organizadas de forma clara para facilitar a gestão de jornada e tomada de decisões.
+        Priorizamos a privacidade e a proteção de dados, seguindo boas práticas e normas vigentes.<br>
+        Nossas soluções são escaláveis e adaptáveis a empresas de diferentes portes e segmentos.
+        Buscamos constantemente inovação tecnológica para oferecer desempenho e estabilidade superiores.
+        Trabalhamos com foco em eficiência operacional e redução de fraudes no controle de ponto.
+        Nosso compromisso é entregar soluções seguras, precisas e alinhadas às necessidades dos nossos clientes.
+      </p>
+      <div class="about-image-wrapper">
+        <img
+          class="about-image"
+          src="/assets/Images/Turnstile_Facial_Recognition.jpg"
+          alt="Catraca com reconhecimento facial"
+        />
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span class="footer-logo">FaceGate</span>
+    <span class="footer-copyright">© 2026 FaceGate. All rights reserved.</span>
+  </footer>
 </ion-content>
