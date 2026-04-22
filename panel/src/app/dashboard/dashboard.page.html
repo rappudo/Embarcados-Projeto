@@ -29,6 +29,15 @@
           <ion-icon name="people-outline" class="dashboard-nav-icon"></ion-icon>
           <span>Funcionários</span>
         </button>
+        <button
+          type="button"
+          class="dashboard-nav-item"
+          [class.active]="activeTab === 'eventos'"
+          (click)="setTab('eventos')"
+        >
+          <ion-icon name="calendar-outline" class="dashboard-nav-icon"></ion-icon>
+          <span>Eventos</span>
+        </button>
       </nav>
     </aside>
 
@@ -93,6 +102,25 @@
 
         <div *ngIf="!selectedFuncionario" class="dashboard-select-message">
           Selecione um funcionário para vizualisar a análise
+        </div>
+      </section>
+
+      <section *ngIf="activeTab === 'eventos'" class="dashboard-view">
+        <header class="dashboard-page-header">
+          <h2 class="dashboard-title">Eventos</h2>
+          <p class="dashboard-subtitle">
+            Últimas atividades e alertas registrados pelo sistema.
+          </p>
+        </header>
+
+        <div class="dashboard-events">
+          <app-event-card
+            *ngFor="let ev of eventos"
+            [titulo]="ev.titulo"
+            [descricao]="ev.descricao"
+            [data]="ev.data"
+            [icone]="ev.icone ?? 'calendar-outline'"
+          ></app-event-card>
         </div>
       </section>
     </main>

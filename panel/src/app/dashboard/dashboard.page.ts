@@ -13,6 +13,14 @@ import {
   IonToolbar,
 } from '@ionic/angular/standalone';
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
+import { EventCardComponent } from '../event-card/event-card.component';
+
+interface Evento {
+  titulo: string;
+  descricao: string;
+  data?: string;
+  icone?: string;
+}
 
 interface Funcionario {
   id: number;
@@ -27,7 +35,7 @@ interface HorariosPontoMock {
   funcionarios: Funcionario[];
 }
 
-type DashboardTab = 'dashboard' | 'funcionarios';
+type DashboardTab = 'dashboard' | 'funcionarios' | 'eventos';
 
 @Component({
   selector: 'app-dashboard',
@@ -46,6 +54,7 @@ type DashboardTab = 'dashboard' | 'funcionarios';
     IonSelectOption,
     IonToolbar,
     EmployeeCardComponent,
+    EventCardComponent,
   ],
 })
 export class DashboardPage implements OnInit {
@@ -60,6 +69,37 @@ export class DashboardPage implements OnInit {
   funcionarios: Funcionario[] = [];
   turnos: string[] = [];
   funcionariosFiltrados: Funcionario[] = [];
+
+  eventos: Evento[] = [
+    {
+      titulo: 'Acesso fora do horário',
+      descricao:
+        'Um funcionário registrou entrada fora do horário definido para o seu turno.',
+      data: '12/04/2026',
+      icone: 'time-outline',
+    },
+    {
+      titulo: 'Falha de reconhecimento',
+      descricao:
+        'O sistema não conseguiu identificar um funcionário após múltiplas tentativas.',
+      data: '11/04/2026',
+      icone: 'alert-circle-outline',
+    },
+    {
+      titulo: 'Novo cadastro concluído',
+      descricao:
+        'Um novo funcionário foi adicionado ao sistema e sua biometria foi registrada com sucesso.',
+      data: '10/04/2026',
+      icone: 'person-add-outline',
+    },
+    {
+      titulo: 'Manutenção programada',
+      descricao:
+        'Manutenção preventiva agendada para a catraca principal. Previsão de 2 horas de indisponibilidade.',
+      data: '09/04/2026',
+      icone: 'construct-outline',
+    },
+  ];
 
   ngOnInit(): void {
     this.http
