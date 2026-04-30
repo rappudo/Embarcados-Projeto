@@ -1,3 +1,15 @@
-.dashboard-header {
+.login-header {
   --ion-background-color: #ffffff;
+}
+
+.login-logo {
+  margin: 0 0 0 8px;
+  font-family: 'Ovelion Regular', sans-serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+
+  span {
+    color: var(--primary);
+  }
 }
