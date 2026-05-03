@@ -1,8 +1,24 @@
-<ion-header class="login-header">
-  <ion-toolbar class="dashboard-toolbar">
-    <h1 class="dashboard-logo">Face<span>Gate</span></h1>
-    <ion-button slot="end" fill="clear" class="dashboard-profile-btn">
-      <ion-icon slot="icon-only" name="person-circle-outline"></ion-icon>
-    </ion-button>
-  </ion-toolbar>
-</ion-header>
+<ion-content class="login-content">
+  <div class="login-container">
+    <h1 class="login-logo">Face<span>Gate</span></h1>
+  </div>
+
+  <ion-form class="login-form">
+    <ion-item class="login-item">
+      <ion-label position="floating">Email</ion-label>
+      <ion-input type="email" required></ion-input>
+    </ion-item>
+
+    <ion-item class="login-item">
+      <ion-label position="floating">Senha</ion-label>
+      <ion-input type="password" required></ion-input>
+    </ion-item>
+
+    <div class="login-actions">
+      <ion-button expand="block" color="primary">Entrar</ion-button>
+      <p class="register-link">
+        Não tem uma conta? <a href="/cadastro">Cadastre-se</a>
+      </p>
+    </div>
+  </ion-form>
+</ion-content>
