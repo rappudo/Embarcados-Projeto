@@ -96,68 +96,99 @@ ion-content {
   box-shadow: none;
 }
 
-.login-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  text-align: left;
+/* Campos */
+.login-field-item {
+  /* remove traços do ion-item e aplica o “box” do input */
+  --background: transparent;
+  --border-color: rgba(255, 255, 255, 0.16);
+  --border-width: 1px;
+  --highlight-color: rgba(111, 217, 111, 0.9);
+  --inner-border-width: 0;
+
+  border-radius: 10px;
+  padding-inline: 0;
+
+  /* garante borda visível nos cantos */
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.login-field-item:focus-within {
+  border-color: rgba(111, 217, 111, 0.9);
 }
 
 .login-field-label {
   font-size: 14px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.9) !important;
+  opacity: 1 !important;
+  margin-inline: 14px;
 }
 
-.login-input {
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 10px;
+.login-field-item:focus-within .login-field-label {
+  color: rgba(255, 255, 255, 0.9) !important;
+  opacity: 1 !important;
+}
 
-  border: 1px solid rgba(255, 255, 255, 0.16);
+/* O input é encapsulado, então estilizamos via parts */
+ion-input.login-input {
+  /* ajusta o “native” para ficar igual ao input anterior */
+  --padding-top: 0px;
+  --padding-bottom: 0px;
+  --padding-start: 14px;
+  --padding-end: 14px;
+  --color: #ffffff;
+  --placeholder-color: rgba(255, 255, 255, 0.6);
+}
+
+ion-input.login-input::part(native) {
+  border-radius: 10px;
+  border: 0;
   background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
-
   font-size: 15px;
   font-family: inherit;
+  box-sizing: border-box;
+
   transition: border-color 0.15s ease, box-shadow 0.15s ease,
     background-color 0.15s ease;
-  box-sizing: border-box;
 }
 
-.login-input::placeholder {
+ion-input.login-input::part(placeholder) {
   color: rgba(255, 255, 255, 0.6);
   opacity: 1;
 }
 
-.login-input:focus {
-  outline: none;
-  border-color: rgba(111, 217, 111, 0.9);
-  box-shadow: 0 0 0 3px rgba(111, 217, 111, 0.2);
+ion-input.login-input:focus-within::part(native) {
+  box-shadow: none;
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Botão */
 .login-submit {
   margin-top: 4px;
-  appearance: none;
-  border: 0;
-  background: #6fd96f;
-  color: #ffffff;
+
+  --background: #6fd96f;
+  --background-hover: #5ec75e;
+  --background-activated: #5ec75e;
+  --color: #ffffff;
+
+  --border-radius: 10px;
+  height: 46px;
+
+  --padding-start: 28px;
+  --padding-end: 28px;
 
   font-weight: 600;
   font-size: 15px;
-  padding: 12px 28px;
-  border-radius: 10px;
-  cursor: pointer;
 
-  transition: background-color 0.15s ease, transform 0.1s ease,
-    box-shadow 0.15s ease;
-
+  --box-shadow: 0 4px 10px -4px rgba(111, 217, 111, 0.6);
   box-shadow: 0 4px 10px -4px rgba(111, 217, 111, 0.6);
+
+  transition: transform 0.1s ease;
 }
 
 .login-submit:hover {
-  background: #5ec75e;
   box-shadow: 0 6px 14px -4px rgba(111, 217, 111, 0.7);
 }
 
@@ -167,10 +198,21 @@ ion-content {
 
 .login-submit[disabled] {
   cursor: not-allowed;
-  background: #9fe6a0;
+
+  --background: #9fe6a0;
+  --background-hover: #9fe6a0;
+  --background-activated: #9fe6a0;
+
+  --box-shadow: none;
   box-shadow: none;
 }
 
+ion-button.login-submit[disabled]::part(native) {
+  opacity: 1 !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Texto de cadastro */
 .login-register-text {
   margin: 6px 0 0;
   font-size: 14px;
