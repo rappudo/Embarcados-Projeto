@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 <ion-content class="login-content">
   <div class="login-container">
     <h1 class="login-logo">Face<span>Gate</span></h1>
@@ -22,3 +23,42 @@
     </div>
   </ion-form>
 </ion-content>
+=======
+<ion-content fullscreen>
+  <div class="login-wrapper">
+    <div class="login-glass">
+      <div class="logo-container login-logo-container">
+        <h1 class="login-brand">
+          Face<span class="gate">Gate</span>
+        </h1>
+      </div>
+
+      <form class="login-form" (ngSubmit)="submitLogin()" #loginForm="ngForm">
+        <label class="login-field">
+          <span class="login-field-label">E-mail</span>
+          <input
+            type="email"
+            name="email"
+            class="login-input"
+            placeholder="voce@exemplo.com"
+            [(ngModel)]="email"
+            required
+          />
+        </label>
+
+        <label class="login-field">
+          <span class="login-field-label">Senha</span>
+          <input type="password" name="password" class="login-input" [(ngModel)]="password" required />
+        </label>
+
+        <button type="submit" class="login-submit" [disabled]="loginForm.invalid">Login</button>
+
+        <p class="login-register-text">
+          Nao possui uma conta? cadastre-se
+          <a class="login-register-link" routerLink="/cadastro">aqui</a>
+        </p>
+      </form>
+    </div>
+  </div>
+</ion-content>
+>>>>>>> Stashed changes
