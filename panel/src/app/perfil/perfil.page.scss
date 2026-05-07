@@ -1,0 +1,28 @@
+:host {
+  --primary: #6fd96f;
+  --primary-strong: #2e7d32;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --border: #e5e7eb;
+  --text: #1f2937;
+  --text-muted: #4b5563;
+  color-scheme: light;
+}
+
+.profile-header {
+  --ion-background-color: #ffffff;
+  height: 10%;
+  align-content: center;
+}
+
+.profile-logo {
+  margin: 0 0 0 8px;
+  font-family: 'Ovelion Regular', sans-serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+
+  span {
+    color: var(--primary);
+  }
+}
