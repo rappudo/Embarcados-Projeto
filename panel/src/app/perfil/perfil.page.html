@@ -1,3 +1,47 @@
 <ion-header class="profile-header">
-    <h1 class="profile-logo">Face<span>Gate</span></h1>
+  <h1 class="profile-logo">Face<span>Gate</span></h1>
 </ion-header>
+
+<ion-content class="profile-content">
+  <div class="profile-layout">
+
+    <aside class="profile-sidebar">
+      <nav class="profile-nav">
+        <button
+          type="button"
+          class="profile-nav-item"
+          [class.active]="activeTab === 'perfil'"
+          (click)="setTab('perfil')"
+        >
+          <ion-icon name="grid-outline" class="profile-nav-icon"></ion-icon>
+          <span>Perfil</span>
+        </button>
+
+        <button
+          type="button"
+          class="profile-nav-item"
+          [class.active]="activeTab === 'empresa'"
+          (click)="setTab('empresa')"
+        >
+          <ion-icon name="people-outline" class="profile-nav-icon"></ion-icon>
+          <span>Empresa</span>
+        </button>
+      </nav>
+    </aside>
+
+    <main class="dashboard-body">
+      <section *ngIf="activeTab === 'perfil'" class="profile-view">
+        <header class="profile-page-header">
+          <h2 class="profile-title">Perfil</h2>
+        </header>
+      </section>
+
+      <section *ngIf="activeTab === 'empresa'" class="empresa-view">
+        <header class="empresa-page-header">
+          <h2 class="empresa-title">Empresa</h2>
+        </header>
+      </section>
+    </main>
+
+  </div>
+</ion-content>

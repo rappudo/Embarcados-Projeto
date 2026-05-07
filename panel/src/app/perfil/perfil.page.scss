@@ -9,6 +9,8 @@
   color-scheme: light;
 }
 
+// ─── Header ───────────────────────────────────────────────────────────────────
+
 .profile-header {
   --ion-background-color: #ffffff;
   height: 10%;
@@ -25,4 +27,62 @@
   span {
     color: var(--primary);
   }
+}
+
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+.profile-layout {
+  display: flex;
+  min-height: 100%;
+  align-items: stretch;
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+
+.profile-sidebar {
+  flex: 0 0 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 12px;
+  box-shadow: 1px 0 3px rgba(0, 0, 0, 0.03);
+}
+
+.profile-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 24px;
+}
+
+.profile-nav-item {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: #f3f4f6;
+    color: var(--primary);
+  }
+
+  &.active {
+    background: rgba(111, 217, 111, 0.15);
+    color: var(--primary-strong);
+    font-weight: 600;
+  }
+}
+
+.profile-nav-icon {
+  font-size: 18px;
 }
