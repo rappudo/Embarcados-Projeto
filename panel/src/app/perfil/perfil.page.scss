@@ -9,7 +9,6 @@
   color-scheme: light;
 }
 
-// ─── Header ───────────────────────────────────────────────────────────────────
 
 .profile-header {
   --ion-background-color: #ffffff;
@@ -29,7 +28,6 @@
   }
 }
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
 
 .profile-layout {
   display: flex;
@@ -37,7 +35,6 @@
   align-items: stretch;
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 .profile-sidebar {
   flex: 0 0 220px;
