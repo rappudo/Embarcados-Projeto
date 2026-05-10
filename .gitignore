@@ -1,70 +1,126 @@
-# ============================================================================
-# Build artifacts (C++)
-# ============================================================================
-build/
-*.o
-*.a
-*.so
-*.dylib
-*.obj
-*.exe
+# =============================================================
+#  FaceGateway — project-wide .gitignore
+# =============================================================
 
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-compile_commands.json
-Makefile
-CTestTestfile.cmake
-_deps/
-*.cmake.in.h
+# -------------------------------------------------------------
+#  Secrets
+# -------------------------------------------------------------
+# Never commit real .env files. Track .env.example instead so
+# new contributors know which keys are needed.
+.env
+.env.local
+.env.*.local
+!.env.example
+!*.env.example
 
-# ============================================================================
-# IDE / Editor
-# ============================================================================
+# -------------------------------------------------------------
+#  Rust backend (cargo build output)
+# -------------------------------------------------------------
+# This is the big one — gigabytes of compiled deps.
+backend/target/
+target/
+
+# Cargo.lock SHOULD be committed for binary crates (your
+# `backend` is a binary), so we don't ignore it.
+
+# -------------------------------------------------------------
+#  Angular / Ionic frontend
+# -------------------------------------------------------------
+panel/node_modules/
+panel/.angular/
+panel/dist/
+panel/www/
+panel/coverage/
+panel/.firebase/
+panel/.sourcemaps/
+
+# package-lock.json should usually be committed.
+
+# -------------------------------------------------------------
+#  C++ edge (CMake)
+# -------------------------------------------------------------
+edge/build/
+edge/build-*/
+edge/cmake-build-*/
+edge/CMakeFiles/
+edge/CMakeCache.txt
+edge/cmake_install.cmake
+edge/Makefile
+edge/compile_commands.json
+edge/*.o
+edge/*.obj
+edge/*.a
+edge/*.so
+edge/*.dylib
+edge/*.exe
+
+# -------------------------------------------------------------
+#  Local databases / caches generated at runtime
+# -------------------------------------------------------------
+# Edge offline event queue (SQLite).
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+
+# pgvector / postgres dump files
+*.sql.bak
+*.dump
+
+# -------------------------------------------------------------
+#  ML model files (often large; consider git-lfs if needed)
+# -------------------------------------------------------------
+# Keep this commented if you DO want models in the repo.
+# *.onnx
+# *.tflite
+# *.pt
+# *.pb
+
+# -------------------------------------------------------------
+#  IDE & editor files
+# -------------------------------------------------------------
 .vscode/
 .idea/
-.vs/
-.cache/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
-# clangd
-.clangd/
-.cache/clangd/
-
-# ============================================================================
-# Runtime data (NÃO versionar)
-# ============================================================================
-# Config real de cada desenvolvedor (senhas, IPs locais)
-edge/config/config.toml
-
-# Modelos ONNX (grandes, baixados separadamente)
-edge/models/*.onnx
-
-# Banco de dados local (runtime)
-edge/cache.db
-edge/cache.db-journal
-edge/cache.db-wal
-edge/cache.db-shm
-edge/data/
-
-# Debug artifacts
-edge/debug_capture.jpg
-edge/*.log
-
-# ============================================================================
-# Python (scripts de debug ONNX)
-# ============================================================================
-__pycache__/
-*.pyc
-*.pyo
-venv/
-.venv/
-
-# ============================================================================
-# Logs
-# ============================================================================
+# -------------------------------------------------------------
+#  Logs and temp
+# -------------------------------------------------------------
 *.log
+logs/
+tmp/
+.tmp/
+
+# -------------------------------------------------------------
+#  Python (in case you have any analysis scripts)
+# -------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# -------------------------------------------------------------
+#  LaTeX (your Main.tex generates these)
+# -------------------------------------------------------------
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.synctex.gz
+*.toc
+*.run.xml
+# Keep the PDF? Up to you. Comment out the next line if you want
+# the compiled report committed.
+# *.pdf
