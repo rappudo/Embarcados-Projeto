@@ -19,3 +19,4 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 anyhow = "1"
 sha2 = "0.11.0"
+pgvector = { version = "^0.3", features = ["sqlx"] }
