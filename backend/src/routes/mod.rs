@@ -11,7 +11,9 @@ use axum::{
 };
 use sqlx::PgPool;
 
+pub mod analytics;
 pub mod auth;
+pub mod embeddings;
 pub mod employees;
 
 /// Shared state passed to every handler via `State<AppState>`.
@@ -30,7 +32,7 @@ pub fn create_router(pool: PgPool, jwt_secret: String) -> Router {
         // ----- public routes -----
         .route("/health", get(health))
         .route("/auth/login", post(auth::login))
-        // ----- protected routes (require Bearer JWT via Claims extractor) -----
+        // ----- employees CRUD (protected) -----
         .route("/employees", get(employees::list).post(employees::create))
         .route(
             "/employees/:id",
@@ -38,6 +40,20 @@ pub fn create_router(pool: PgPool, jwt_secret: String) -> Router {
                 .patch(employees::update)
                 .delete(employees::delete),
         )
+        // ----- face embeddings (protected) -----
+        .route(
+            "/employees/:id/embeddings",
+            get(embeddings::list).post(embeddings::create),
+        )
+        // ----- analytics (protected) -----
+        .route("/analytics/access-by-hour", get(analytics::access_by_hour))
+        .route("/analytics/events", get(analytics::events))
+        .route("/analytics/avg-delay", get(analytics::avg_delay))
+        .route(
+            "/analytics/presence-heatmap",
+            get(analytics::presence_heatmap),
+        )
+        .route("/analytics/summary-today", get(analytics::summary_today))
         .with_state(state)
 }
 
