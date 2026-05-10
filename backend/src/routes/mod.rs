@@ -12,6 +12,7 @@ use axum::{
 use sqlx::PgPool;
 
 pub mod auth;
+pub mod employees;
 
 /// Shared state passed to every handler via `State<AppState>`.
 /// `Clone` is cheap: `PgPool` is internally `Arc`-backed and `String`
@@ -29,9 +30,14 @@ pub fn create_router(pool: PgPool, jwt_secret: String) -> Router {
         // ----- public routes -----
         .route("/health", get(health))
         .route("/auth/login", post(auth::login))
-        // ----- protected routes -----
-        // (added in 4.4 onwards. They take `claims: Claims` as a parameter
-        //  and Axum's extractor system will 401 unauthenticated callers.)
+        // ----- protected routes (require Bearer JWT via Claims extractor) -----
+        .route("/employees", get(employees::list).post(employees::create))
+        .route(
+            "/employees/:id",
+            get(employees::get_one)
+                .patch(employees::update)
+                .delete(employees::delete),
+        )
         .with_state(state)
 }
 
