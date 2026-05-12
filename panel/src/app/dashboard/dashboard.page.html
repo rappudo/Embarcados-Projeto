@@ -1,10 +1,5 @@
 <ion-header class="dashboard-header">
-  <ion-toolbar class="dashboard-toolbar">
     <h1 class="dashboard-logo">Face<span>Gate</span></h1>
-    <ion-button slot="end" fill="clear" class="dashboard-profile-btn">
-      <ion-icon slot="icon-only" name="person-circle-outline"></ion-icon>
-    </ion-button>
-  </ion-toolbar>
 </ion-header>
 
 <ion-content class="dashboard-content">
@@ -45,7 +40,151 @@
       <section *ngIf="activeTab === 'dashboard'" class="dashboard-view">
         <header class="dashboard-page-header">
           <h2 class="dashboard-title">Dashboard</h2>
+          <p class="dashboard-subtitle">
+            Visão geral de presença, pontualidade e horas trabalhadas.
+          </p>
         </header>
+
+        <div class="dashboard-period-bar">
+          <ion-label class="dashboard-period-label">Período</ion-label>
+          <ion-select
+            interface="popover"
+            class="dashboard-select dashboard-period-select"
+            [(ngModel)]="periodoDias"
+            (ionChange)="onPeriodoChange()"
+          >
+            <ion-select-option [value]="30">Últimos 30 dias</ion-select-option>
+            <ion-select-option [value]="60">Últimos 60 dias</ion-select-option>
+            <ion-select-option [value]="90">Últimos 90 dias</ion-select-option>
+          </ion-select>
+        </div>
+
+        <div class="kpi-grid">
+          <ion-card class="kpi-card">
+            <ion-card-content class="kpi-card-content">
+              <div class="kpi-icon kpi-icon-primary">
+                <ion-icon name="people-outline"></ion-icon>
+              </div>
+              <div class="kpi-text">
+                <span class="kpi-label">Funcionários</span>
+                <span class="kpi-value">{{ totalFuncionarios }}</span>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="kpi-card">
+            <ion-card-content class="kpi-card-content">
+              <div class="kpi-icon kpi-icon-success">
+                <ion-icon name="checkmark-done-outline"></ion-icon>
+              </div>
+              <div class="kpi-text">
+                <span class="kpi-label">Pontualidade</span>
+                <span class="kpi-value">{{ pontualidadePct }}%</span>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="kpi-card">
+            <ion-card-content class="kpi-card-content">
+              <div class="kpi-icon kpi-icon-warn">
+                <ion-icon name="time-outline"></ion-icon>
+              </div>
+              <div class="kpi-text">
+                <span class="kpi-label">Atrasos</span>
+                <span class="kpi-value">{{ totalAtrasos }}</span>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="kpi-card">
+            <ion-card-content class="kpi-card-content">
+              <div class="kpi-icon kpi-icon-info">
+                <ion-icon name="hourglass-outline"></ion-icon>
+              </div>
+              <div class="kpi-text">
+                <span class="kpi-label">Média h/dia por funcionário</span>
+                <span class="kpi-value">{{ mediaHorasDiarias }}h</span>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        </div>
+
+        <ion-card class="chart-card">
+          <ion-card-header class="chart-card-header">
+            <ion-card-title class="chart-card-title">Horas trabalhadas por dia</ion-card-title>
+            <ion-select
+              interface="popover"
+              class="dashboard-select"
+              [(ngModel)]="turnoChartFiltro"
+              (ionChange)="onTurnoChartChange()"
+              placeholder="Todos turnos"
+            >
+              <ion-select-option [value]="null">Todos turnos</ion-select-option>
+              <ion-select-option *ngFor="let t of turnos" [value]="t">{{ t }}</ion-select-option>
+            </ion-select>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="bar-chart bar-chart-daily" *ngIf="horasPorDia.length; else semHoras">
+              <div class="bar-chart-y-axis">
+                <span>{{ maxHorasDia }}h</span>
+                <span>0h</span>
+              </div>
+              <div class="bar-chart-bars bar-chart-bars-scroll">
+                <div *ngFor="let d of horasPorDia" class="bar-chart-bar-wrap">
+                  <div
+                    class="bar-chart-bar bar-chart-bar-primary"
+                    [style.height.%]="(d.horas / maxHorasDia) * 100"
+                    [attr.title]="d.label + ': ' + d.horas + 'h'"
+                  ></div>
+                  <span class="bar-chart-label">{{ d.label }}</span>
+                </div>
+              </div>
+            </div>
+            <ng-template #semHoras>
+              <p class="chart-empty">Sem dados para o período selecionado.</p>
+            </ng-template>
+          </ion-card-content>
+        </ion-card>
+
+        <div class="charts-row">
+          <ion-card class="chart-card">
+            <ion-card-header>
+              <ion-card-title class="chart-card-title">Distribuição por turno</ion-card-title>
+            </ion-card-header>
+            <ion-card-content class="pie-card-content">
+              <svg class="pie-chart" viewBox="0 0 100 100" *ngIf="pieSegments.length">
+                <path *ngFor="let s of pieSegments" [attr.d]="s.d" [attr.fill]="s.color" />
+              </svg>
+              <ul class="pie-legend">
+                <li *ngFor="let d of distribuicaoTurno">
+                  <span class="legend-dot" [style.background-color]="d.color"></span>
+                  <span class="legend-label">{{ d.turno }}</span>
+                  <span class="legend-value">{{ d.pct }}%</span>
+                </li>
+              </ul>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="chart-card">
+            <ion-card-header>
+              <ion-card-title class="chart-card-title">Atrasos por dia da semana</ion-card-title>
+            </ion-card-header>
+            <ion-card-content>
+              <div class="bar-chart bar-chart-weekday">
+                <div class="bar-chart-bars">
+                  <div *ngFor="let d of atrasosPorDiaSemana" class="bar-chart-bar-wrap">
+                    <span class="bar-chart-value">{{ d.count }}</span>
+                    <div
+                      class="bar-chart-bar bar-chart-bar-warn"
+                      [style.height.%]="(d.count / maxAtrasoDiaSemana) * 100"
+                    ></div>
+                    <span class="bar-chart-label">{{ d.dia }}</span>
+                  </div>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        </div>
       </section>
 
       <section *ngIf="activeTab === 'funcionarios'" class="dashboard-view">

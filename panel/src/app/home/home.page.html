@@ -1,13 +1,13 @@
 <ion-content fullscreen>
-  <ion-button id="profile-burger" class="profile-burger-button">
+  <ion-button id="home-burger" class="profile-burger-button">
     <ion-icon slot="icon-only" src="/assets/icon/Profile.svg"></ion-icon>
   </ion-button>
 
-  <ion-popover trigger="profile-burger" dismiss-on-select="true" side="bottom" alignment="end">
+  <ion-popover trigger="home-burger" dismiss-on-select="true" side="bottom" alignment="end">
     <ng-template>
       <ion-content>
         <ion-list lines="none">
-          <ion-item button detail="false">
+          <ion-item button detail="false" routerLink = "/perfil">
             <ion-label>Perfil</ion-label>
           </ion-item>
           <ion-item button detail="false" routerLink="/dashboard">

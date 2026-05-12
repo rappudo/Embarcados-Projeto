@@ -1,3 +1,242 @@
-.dashboard-header {
-  --ion-background-color: #ffffff;
+@font-face {
+  font-family: 'Ovelion Regular';
+  src: url('/assets/Fonts/Ovelion Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+ion-content {
+  --background: transparent;
+  background: transparent;
+}
+
+.login-wrapper {
+  height: 100%;
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  overflow: hidden;
+}
+
+/* Background completo da tela */
+.login-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/assets/Images/Splash_Background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(10px);
+  transform: scale(1.06);
+  z-index: 0;
+}
+
+/* Escurece 40% */
+.login-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 0;
+}
+
+.login-glass {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+
+  border-radius: 20px;
+  padding: 22px 18px;
+
+  background: rgba(17, 24, 39, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  box-shadow: 0 20px 60px -35px rgba(0, 0, 0, 0.6);
+}
+
+.login-logo-container {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  width: 100%;
+  max-width: none;
+  margin-bottom: 16px;
+  padding: 0;
+}
+
+.login-brand {
+  font-family: 'Ovelion Regular', sans-serif;
+  font-size: 44px;
+  margin: 0;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.login-brand .gate {
+  color: #6fd96f;
+}
+
+.login-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: transparent;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+/* Campos */
+.login-field-item {
+  /* remove traços do ion-item e aplica o “box” do input */
+  --background: transparent;
+  --border-color: rgba(255, 255, 255, 0.16);
+  --border-width: 1px;
+  --highlight-color: rgba(111, 217, 111, 0.9);
+  --inner-border-width: 0;
+
+  border-radius: 10px;
+  padding-inline: 0;
+
+  /* garante borda visível nos cantos */
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.login-field-item:focus-within {
+  border-color: rgba(111, 217, 111, 0.9);
+}
+
+.login-field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9) !important;
+  opacity: 1 !important;
+  margin-inline: 14px;
+}
+
+.login-field-item:focus-within .login-field-label {
+  color: rgba(255, 255, 255, 0.9) !important;
+  opacity: 1 !important;
+}
+
+/* O input é encapsulado, então estilizamos via parts */
+ion-input.login-input {
+  /* ajusta o “native” para ficar igual ao input anterior */
+  --padding-top: 0px;
+  --padding-bottom: 0px;
+  --padding-start: 14px;
+  --padding-end: 14px;
+  --color: #ffffff;
+  --placeholder-color: rgba(255, 255, 255, 0.6);
+}
+
+ion-input.login-input::part(native) {
+  border-radius: 10px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-size: 15px;
+  font-family: inherit;
+  box-sizing: border-box;
+
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+ion-input.login-input::part(placeholder) {
+  color: rgba(255, 255, 255, 0.6);
+  opacity: 1;
+}
+
+ion-input.login-input:focus-within::part(native) {
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Botão */
+.login-submit {
+  margin-top: 4px;
+
+  --background: #6fd96f;
+  --background-hover: #5ec75e;
+  --background-activated: #5ec75e;
+  --color: #ffffff;
+
+  --border-radius: 10px;
+  height: 46px;
+
+  --padding-start: 28px;
+  --padding-end: 28px;
+
+  font-weight: 600;
+  font-size: 15px;
+
+  --box-shadow: 0 4px 10px -4px rgba(111, 217, 111, 0.6);
+  box-shadow: 0 4px 10px -4px rgba(111, 217, 111, 0.6);
+
+  transition: transform 0.1s ease;
+}
+
+.login-submit:hover {
+  box-shadow: 0 6px 14px -4px rgba(111, 217, 111, 0.7);
+}
+
+.login-submit:active {
+  transform: translateY(1px);
+}
+
+.login-submit[disabled] {
+  cursor: not-allowed;
+
+  --background: #9fe6a0;
+  --background-hover: #9fe6a0;
+  --background-activated: #9fe6a0;
+
+  --box-shadow: none;
+  box-shadow: none;
+}
+
+ion-button.login-submit[disabled]::part(native) {
+  opacity: 1 !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Texto de cadastro */
+.login-register-text {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+}
+
+.login-register-link {
+  color: #7ee07e;
+  text-decoration: none;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+.login-register-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .login-glass {
+    padding: 18px 14px;
+  }
+
+  .login-brand {
+    font-size: 38px;
+  }
 }

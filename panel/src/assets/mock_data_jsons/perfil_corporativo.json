@@ -1,0 +1,31 @@
+{
+  "perfil": {
+    "nome": "Ana Beatriz",
+    "sobrenome": "Marques de Oliveira",
+    "telefone": "(11) 98432-7165",
+    "email": "ana.marques@facegate.com.br",
+    "cargo": "Gerente de Operações",
+    "departamento": "Diretoria de Operações",
+    "matricula": "TVS-002847",
+    "dataAdmissao": "2021-08-16",
+    "turno": "Integral",
+    "localizacao": "São Paulo, SP",
+    "fotoPerfil": "/assets/Images/Profile_Placeholder.jpg",
+    "bio": "Profissional com mais de 10 anos de experiência em gestão de operações corporativas, controle de acesso e otimização de processos internos. Responsável pela implantação e monitoramento dos sistemas FaceGate na unidade matriz."
+  },
+  "empresa": {
+    "razaoSocial": "FaceGate Sistemas Integrados Ltda.",
+    "nomeFantasia": "FaceGate",
+    "cnpj": "27.418.339/0001-54",
+    "setor": "Tecnologia da Informação",
+    "endereco": {
+      "logradouro": "Av. Paulista, 1842",
+      "complemento": "Conjunto 1204 - Bela Vista",
+      "cidade": "São Paulo",
+      "estado": "SP",
+      "cep": "01310-200"
+    },
+    "telefoneCorporativo": "(11) 4002-8922",
+    "site": "www.facegate.com.br"
+  }
+}

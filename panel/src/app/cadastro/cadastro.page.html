@@ -1,13 +1,97 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>cadastro</ion-title>
-  </ion-toolbar>
-</ion-header>
+<ion-content fullscreen>
+  <div class="login-wrapper">
+    <div class="login-glass">
+      <div class="logo-container login-logo-container">
+        <h1 class="login-brand">
+          Face<span class="gate">Gate</span>
+        </h1>
+      </div>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">cadastro</ion-title>
-    </ion-toolbar>
-  </ion-header>
+      <form class="login-form" (ngSubmit)="submitCadastro()" #cadastroForm="ngForm">
+        <ion-item class="login-field-item" lines="none">
+          <ion-label class="login-field-label" position="stacked">Nome</ion-label>
+          <ion-input
+            class="login-input"
+            type="text"
+            name="nome"
+            placeholder="Nome Completo"
+            [(ngModel)]="nome"
+            required
+            autocomplete="given-name"
+          ></ion-input>
+        </ion-item>
+
+        <ion-item class="login-field-item" lines="none">
+          <ion-label class="login-field-label" position="stacked">Sobrenome</ion-label>
+          <ion-input
+            class="login-input"
+            type="text"
+            name="sobrenome"
+            placeholder="Sobrenome"
+            [(ngModel)]="sobrenome"
+            required
+            autocomplete="family-name"
+          ></ion-input>
+        </ion-item>
+
+        <ion-item class="login-field-item" lines="none">
+          <ion-label class="login-field-label" position="stacked">Telefone</ion-label>
+          <ion-input
+            class="login-input"
+            type="tel"
+            name="telefone"
+            placeholder="(00) 12345-6789"
+            [(ngModel)]="telefone"
+            required
+            autocomplete="tel"
+          ></ion-input>
+        </ion-item>
+
+        <ion-item class="login-field-item" lines="none">
+          <ion-label class="login-field-label" position="stacked">Empresa</ion-label>
+          <ion-input
+            class="login-input"
+            type="text"
+            name="empresa"
+            placeholder="Nome da Empresa"
+            [(ngModel)]="empresa"
+            required
+            autocomplete="organization"
+          ></ion-input>
+        </ion-item>
+
+        <ion-item class="login-field-item" lines="none">
+          <ion-label class="login-field-label" position="stacked">E-mail</ion-label>
+          <ion-input
+            class="login-input"
+            type="email"
+            name="email"
+            placeholder="voce@exemplo.com"
+            [(ngModel)]="email"
+            required
+            autocomplete="email"
+          ></ion-input>
+        </ion-item>
+
+        <ion-item class="login-field-item login-terms-item" lines="none">
+          <ion-checkbox
+            class="login-terms-checkbox"
+            name="terms"
+            [(ngModel)]="agreedToTerms"
+            (ionChange)="agreedToTerms = $event.detail.checked"
+            required
+          >
+          </ion-checkbox>
+
+          <ion-label class="login-terms-label">
+            Li e concordo com os termos de uso e Política de Privacidade
+          </ion-label>
+        </ion-item>
+
+        <ion-button type="submit" class="login-submit" [disabled]="cadastroForm.invalid">
+          Cadastrar-se
+        </ion-button>
+      </form>
+    </div>
+  </div>
 </ion-content>

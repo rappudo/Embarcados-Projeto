@@ -1,20 +1,27 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IonContent, IonHeader, IonTitle, IonToolbar } from '@ionic/angular/standalone';
+import { RouterLink } from '@angular/router';
+import { IonContent, IonButton, IonItem, IonLabel, IonInput } from '@ionic/angular/standalone';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.page.html',
   styleUrls: ['./login.page.scss'],
   standalone: true,
-  imports: [IonContent, IonHeader, IonTitle, IonToolbar, CommonModule, FormsModule]
+  imports: [IonContent, IonButton, IonItem, IonLabel, IonInput, CommonModule, FormsModule, RouterLink],
 })
 export class LoginPage implements OnInit {
+  email = '';
+  password = '';
 
-  constructor() { }
+  constructor() {}
 
-  ngOnInit() {
+  ngOnInit() {}
+
+  submitLogin() {
+    // Por enquanto, apenas limpa os campos (a autenticação pode ser integrada depois).
+    this.email = '';
+    this.password = '';
   }
-
 }
