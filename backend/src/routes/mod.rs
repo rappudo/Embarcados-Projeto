@@ -1,9 +1,9 @@
 //! HTTP router composition.
 //!
-//! `AppState` holds everything handlers need (currently: DB pool +
-//! JWT secret). Public routes are mounted as-is; protected routes
-//! are protected by virtue of their handlers taking `Claims` as a
-//! parameter (see `auth.rs`).
+//! `AppState` holds everything handlers need (DB pool, JWT secret, the
+//! shared MQTT subscriber state). Public routes are mounted as-is;
+//! protected routes are protected by virtue of their handlers taking
+//! `Claims` as a parameter (see `auth.rs`).
 
 use axum::{
     Router,
@@ -15,18 +15,27 @@ pub mod analytics;
 pub mod auth;
 pub mod embeddings;
 pub mod employees;
+pub mod system;
+pub mod users;
+
+use crate::mqtt::MqttStateHandle;
 
 /// Shared state passed to every handler via `State<AppState>`.
-/// `Clone` is cheap: `PgPool` is internally `Arc`-backed and `String`
-/// is cloned once per request.
+/// `Clone` is cheap: `PgPool` is internally `Arc`-backed, `String`
+/// is cloned once per request, and the MQTT state is already an `Arc`.
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
     pub jwt_secret: String,
+    pub mqtt: MqttStateHandle,
 }
 
-pub fn create_router(pool: PgPool, jwt_secret: String) -> Router {
-    let state = AppState { pool, jwt_secret };
+pub fn create_router(pool: PgPool, jwt_secret: String, mqtt: MqttStateHandle) -> Router {
+    let state = AppState {
+        pool,
+        jwt_secret,
+        mqtt,
+    };
 
     Router::new()
         // ----- public routes -----
@@ -45,6 +54,12 @@ pub fn create_router(pool: PgPool, jwt_secret: String) -> Router {
             "/employees/:id/embeddings",
             get(embeddings::list).post(embeddings::create),
         )
+        // Browser-driven enrollment (demo path — see embeddings::enroll docs).
+        .route("/employees/:id/enroll", post(embeddings::enroll))
+        // ----- users (protected, single-tier auth) -----
+        .route("/users", get(users::list).post(users::create))
+        // ----- system status (protected) -----
+        .route("/system/mqtt-status", get(system::mqtt_status))
         // ----- analytics (protected) -----
         .route("/analytics/access-by-hour", get(analytics::access_by_hour))
         .route("/analytics/events", get(analytics::events))
@@ -54,6 +69,7 @@ pub fn create_router(pool: PgPool, jwt_secret: String) -> Router {
             get(analytics::presence_heatmap),
         )
         .route("/analytics/summary-today", get(analytics::summary_today))
+        .route("/analytics/present-today", get(analytics::present_today))
         .with_state(state)
 }
 

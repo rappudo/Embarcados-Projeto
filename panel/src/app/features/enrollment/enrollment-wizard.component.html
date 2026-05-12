@@ -1,0 +1,121 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="cancel()" [disabled]="uploading()">Cancelar</ion-button>
+    </ion-buttons>
+    <ion-title>Cadastrar rosto</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <!--
+    Compact production-vs-demo note. The brief required surfacing the
+    fact that the demo uses the browser camera, while production would
+    use the door's Pi camera. Kept visible at the top so reviewers see
+    it immediately.
+  -->
+  <ion-note class="prod-note">
+    Versão de produção captura imagens da câmera da catraca (Raspberry Pi). Esta
+    versão usa a webcam do navegador para fins de demonstração.
+  </ion-note>
+
+  <p class="employee-name">
+    Cadastrando rosto para <strong>{{ employeeName() || ('#' + employeeId()) }}</strong>
+  </p>
+
+  <!-- ============ camera state machine ============ -->
+  @if (camState() === 'idle') {
+  <div class="permission">
+    <p>
+      Para cadastrar o rosto vamos acessar a câmera deste dispositivo.
+      Nenhum vídeo é gravado — apenas as fotos capturadas são enviadas.
+    </p>
+    <ion-button expand="block" (click)="startCamera()">
+      <ion-icon name="camera-outline" slot="start"></ion-icon>
+      Ativar câmera
+    </ion-button>
+  </div>
+  } @else if (camState() === 'denied') {
+  <div class="permission error">
+    <p><strong>Acesso à câmera negado.</strong></p>
+    <p class="hint">
+      Permita o acesso nas configurações do navegador e recarregue a página.
+    </p>
+  </div>
+  } @else if (camState() === 'error') {
+  <div class="permission error">
+    <p><strong>Câmera indisponível</strong></p>
+    <p class="hint">{{ camError() }}</p>
+  </div>
+  }
+
+  <!--
+    The video is kept in the DOM whenever the camera is live, even when
+    no captures yet, so the user can see what they're framing.
+    The canvas stays hidden — it's just a scratch buffer for toDataURL.
+  -->
+  <div class="preview" [class.preview-hidden]="camState() !== 'live'">
+    <video #video autoplay playsinline muted></video>
+    <canvas #canvas hidden></canvas>
+
+    @if (camError() && camState() === 'live') {
+    <p class="hint inline-err">{{ camError() }}</p>
+    }
+
+    <ion-button
+      expand="block"
+      (click)="capture()"
+      [disabled]="uploading()"
+      class="ion-margin-top"
+    >
+      <ion-icon name="camera-outline" slot="start"></ion-icon>
+      Capturar ({{ captures().length }})
+    </ion-button>
+  </div>
+
+  <!-- ============ captured thumbnails ============ -->
+  @if (captures().length > 0) {
+  <h3 class="section-title">Capturas</h3>
+  <div class="thumbs">
+    @for (shot of captures(); track $index) {
+    <div class="thumb">
+      <img [src]="shot" alt="Captura {{ $index + 1 }}" />
+      <button
+        type="button"
+        class="remove"
+        aria-label="Remover captura"
+        (click)="removeCapture($index)"
+        [disabled]="uploading()"
+      >
+        <ion-icon name="close-outline"></ion-icon>
+      </button>
+    </div>
+    }
+  </div>
+  }
+
+  @if (uploading()) {
+  <div class="upload-progress">
+    <ion-spinner name="dots"></ion-spinner>
+    <span>Enviando {{ uploadProgress() }}/{{ captures().length }}</span>
+  </div>
+  }
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <ion-button
+      expand="block"
+      class="ion-margin"
+      [disabled]="captures().length < minCaptures || uploading()"
+      (click)="submit()"
+    >
+      <ion-icon name="checkmark-outline" slot="start"></ion-icon>
+      @if (captures().length < minCaptures) {
+        Concluir (mínimo {{ minCaptures }})
+      } @else {
+        Concluir ({{ captures().length }} fotos)
+      }
+    </ion-button>
+  </ion-toolbar>
+</ion-footer>

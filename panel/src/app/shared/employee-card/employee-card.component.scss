@@ -1,0 +1,23 @@
+// Override Ionic's default ion-avatar to make a solid-color circle
+// with a centered letter, instead of expecting an <img> inside.
+.initial-avatar {
+  background: var(--ion-color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+
+  span {
+    color: white;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+}
+
+.no-shift {
+  font-style: italic;
+  color: var(--ion-color-medium);
+}

@@ -1,0 +1,10 @@
+<div class="stat-card">
+  <div class="label">{{ label() }}</div>
+  <!--
+    [attr.data-color] binds an HTML attribute (not a property).
+    The SCSS uses [data-color="..."] selectors to color the number.
+  -->
+  <div class="value" [attr.data-color]="color()">
+    {{ value() | number }}
+  </div>
+</div>

@@ -81,6 +81,7 @@ pub async fn access_by_hour(
 #[derive(Deserialize)]
 pub struct EventsQuery {
     pub employee_id: Option<i32>,
+    pub status: Option<String>,
     pub from: Option<i64>, // unix ms
     pub to: Option<i64>,   // unix ms
     pub limit: Option<i64>,
@@ -106,20 +107,22 @@ pub async fn events(
 
     let rows = sqlx::query_as::<_, EventRow>(
         "SELECT
-            e.id,
-            emp.name AS employee_name,
-            e.status,
-            e.distance,
-            e.timestamp_ms
-         FROM access_events e
-         LEFT JOIN employees emp ON e.employee_id = emp.id
-         WHERE ($1::int    IS NULL OR e.employee_id  = $1)
-           AND ($2::bigint IS NULL OR e.timestamp_ms >= $2)
-           AND ($3::bigint IS NULL OR e.timestamp_ms <= $3)
-         ORDER BY e.timestamp_ms DESC
-         LIMIT $4 OFFSET $5",
+                e.id,
+                emp.name AS employee_name,
+                e.status,
+                e.distance,
+                e.timestamp_ms
+             FROM access_events e
+             LEFT JOIN employees emp ON e.employee_id = emp.id
+             WHERE ($1::int    IS NULL OR e.employee_id  = $1)
+               AND ($2::text   IS NULL OR e.status       = $2)
+               AND ($3::bigint IS NULL OR e.timestamp_ms >= $3)
+               AND ($4::bigint IS NULL OR e.timestamp_ms <= $4)
+             ORDER BY e.timestamp_ms DESC
+             LIMIT $5 OFFSET $6",
     )
     .bind(q.employee_id)
+    .bind(q.status.as_deref())
     .bind(q.from)
     .bind(q.to)
     .bind(limit)
@@ -234,6 +237,72 @@ pub async fn presence_heatmap(
     .await
     .map_err(|e| {
         error!("presence_heatmap db error: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "db error")
+    })?;
+
+    Ok(Json(rows))
+}
+
+// ============================================================
+// GET /analytics/present-today
+// ============================================================
+
+/// One row per employee whose latest "in"-direction event today is
+/// more recent than any "out"-direction event today.
+///
+/// Approximation note: until the edge starts publishing direction,
+/// every event defaults to 'in', so this query effectively counts
+/// "anyone with a granted entry today." Once exit events come online
+/// the same query produces the correct presence list with no changes.
+#[derive(Serialize, sqlx::FromRow)]
+pub struct PresentEmployee {
+    pub employee_id: i32,
+    pub name: String,
+    pub last_entry_ms: i64,
+}
+
+pub async fn present_today(
+    _claims: Claims,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<PresentEmployee>>, (StatusCode, &'static str)> {
+    let rows = sqlx::query_as::<_, PresentEmployee>(
+        r#"
+        WITH today_in AS (
+            SELECT employee_id, MAX(timestamp_ms) AS last_in
+            FROM access_events
+            WHERE status = 'granted'
+              AND direction = 'in'
+              AND employee_id IS NOT NULL
+              AND DATE(to_timestamp(timestamp_ms / 1000.0) AT TIME ZONE $1)
+                  = (NOW() AT TIME ZONE $1)::date
+            GROUP BY employee_id
+        ),
+        today_out AS (
+            SELECT employee_id, MAX(timestamp_ms) AS last_out
+            FROM access_events
+            WHERE status = 'granted'
+              AND direction = 'out'
+              AND employee_id IS NOT NULL
+              AND DATE(to_timestamp(timestamp_ms / 1000.0) AT TIME ZONE $1)
+                  = (NOW() AT TIME ZONE $1)::date
+            GROUP BY employee_id
+        )
+        SELECT
+            ti.employee_id            AS employee_id,
+            emp.name                  AS name,
+            ti.last_in                AS last_entry_ms
+        FROM today_in ti
+        JOIN employees emp ON emp.id = ti.employee_id
+        LEFT JOIN today_out o ON o.employee_id = ti.employee_id
+        WHERE o.last_out IS NULL OR o.last_out < ti.last_in
+        ORDER BY ti.last_in DESC
+        "#,
+    )
+    .bind(TZ)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| {
+        error!("present_today db error: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, "db error")
     })?;
 

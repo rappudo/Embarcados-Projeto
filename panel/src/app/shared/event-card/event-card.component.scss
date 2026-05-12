@@ -1,0 +1,17 @@
+.status-icon {
+  font-size: 32px;
+  align-self: center;
+  margin-inline-end: 8px;
+}
+
+.unknown {
+  font-style: italic;
+  color: var(--ion-color-medium);
+}
+
+.distance-chip {
+  font-family: monospace;
+  font-size: 12px;
+  min-width: 56px;
+  justify-content: center;
+}

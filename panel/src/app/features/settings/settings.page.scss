@@ -1,0 +1,32 @@
+.section-title {
+  margin: 24px 0 12px;
+  color: var(--ion-color-medium-shade);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--ion-color-medium);
+  font-style: italic;
+}
+
+// Status indicator dot. Grey = unknown, green = ok, red = bad.
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ion-color-medium);
+  margin-right: 8px;
+  vertical-align: middle;
+
+  &.ok {
+    background: var(--ion-color-success);
+  }
+
+  &.bad {
+    background: var(--ion-color-danger);
+  }
+}

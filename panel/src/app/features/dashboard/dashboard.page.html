@@ -1,0 +1,52 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button menu="main-menu"></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Dashboard</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <!-- ===== Summary cards =====
+       4 cards: 4-col grid on wide screens, 2x2 on narrow, 1-col on tiny.
+       Layout adapts in dashboard.page.scss. -->
+  <div class="stats-grid">
+    <app-stat-card
+      label="Total hoje"
+      [value]="summary()?.total ?? 0"
+      color="primary"
+    />
+    <app-stat-card
+      label="Concedidos"
+      [value]="summary()?.granted ?? 0"
+      color="success"
+    />
+    <app-stat-card
+      label="Não reconhecidos"
+      [value]="summary()?.unknown ?? 0"
+      color="warning"
+    />
+    <app-stat-card
+      label="Pessoas presentes"
+      [value]="presentCount()"
+      color="primary"
+    />
+  </div>
+
+  <!-- ===== Bar chart ===== -->
+  <h3 class="section-title">Acessos por hora</h3>
+  @if (chartOpts(); as opts) {
+  <!--
+      ECharts renders into this div. `[options]` is the entire chart
+      config; changing it triggers a re-render with animation.
+      The container MUST have a fixed height; ECharts can't size itself.
+    -->
+  <div echarts [options]="opts" class="chart-container"></div>
+  } @else {
+  <div class="chart-loading">
+    <p>Carregando gráfico…</p>
+  </div>
+  }
+
+</ion-content>
