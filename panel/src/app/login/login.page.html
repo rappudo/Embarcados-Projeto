@@ -1,0 +1,51 @@
+<ion-content fullscreen>
+  <div class="login-wrapper">
+    <div class="login-glass">
+      <div class="logo-container login-logo-container">
+        <h1 class="login-brand">
+          Face<span class="gate">Gate</span>
+        </h1>
+      </div>
+
+      <form class="login-form" (ngSubmit)="submitLogin()" #loginForm="ngForm">
+        <ion-item class="login-field-item" lines="none">
+          <ion-label class="login-field-label" position="stacked">E-mail</ion-label>
+          <ion-input
+            class="login-input"
+            type="email"
+            name="email"
+            placeholder="voce@exemplo.com"
+            [(ngModel)]="email"
+            required
+            autocomplete="email"
+          ></ion-input>
+        </ion-item>
+
+        <ion-item class="login-field-item" lines="none">
+          <ion-label class="login-field-label" position="stacked">Senha</ion-label>
+          <ion-input
+            class="login-input"
+            type="password"
+            name="password"
+            [(ngModel)]="password"
+            required
+            autocomplete="current-password"
+          ></ion-input>
+        </ion-item>
+
+        <ion-button
+          type="submit"
+          class="login-submit"
+          [disabled]="loginForm.invalid"
+        >
+          Login
+        </ion-button>
+
+        <p class="login-register-text">
+          Nao possui uma conta? cadastre-se
+          <a class="login-register-link" routerLink="/cadastro">aqui</a>
+        </p>
+      </form>
+    </div>
+  </div>
+</ion-content>

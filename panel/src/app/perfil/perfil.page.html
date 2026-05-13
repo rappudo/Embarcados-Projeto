@@ -1,0 +1,151 @@
+<ion-header class="profile-header">
+  <h1 class="profile-logo">Face<span>Gate</span></h1>
+
+  <ion-button id="perfil-burger" class="profile-burger-button" fill="clear">
+    <ion-icon slot="icon-only" src="/assets/icon/Burger_Menu.svg"></ion-icon>
+  </ion-button>
+
+  <ion-popover trigger="perfil-burger" dismiss-on-select="true" side="bottom" alignment="end">
+    <ng-template>
+      <ion-content>
+        <ion-list lines="none">
+          <ion-item button detail="false" routerLink="/home">
+            <ion-label>Home</ion-label>
+          </ion-item>
+          <ion-item button detail="false" routerLink="/dashboard">
+            <ion-label>Dashboard</ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-content>
+    </ng-template>
+  </ion-popover>
+</ion-header>
+
+<ion-content class="profile-content">
+  <div class="profile-page" *ngIf="perfil && empresa">
+
+    <ion-card class="profile-hero-card">
+      <ion-card-content class="profile-hero">
+        <ion-avatar class="profile-avatar">
+          <img
+            [src]="perfil.fotoPerfil"
+            alt="Foto de perfil de {{ nomeCompleto }}"
+          />
+        </ion-avatar>
+
+        <div class="profile-identity">
+          <span class="profile-eyebrow">Perfil corporativo</span>
+          <h2 class="profile-name">{{ nomeCompleto }}</h2>
+          <p class="profile-role">{{ perfil.cargo }} · {{ perfil.departamento }}</p>
+
+          <div class="profile-meta">
+            <ion-chip class="profile-chip" outline="true">
+              <ion-icon name="business-outline"></ion-icon>
+              <ion-label>{{ empresa.nomeFantasia }}</ion-label>
+            </ion-chip>
+            <ion-chip class="profile-chip" outline="true">
+              <ion-icon name="location-outline"></ion-icon>
+              <ion-label>{{ perfil.localizacao }}</ion-label>
+            </ion-chip>
+            <ion-chip class="profile-chip" outline="true">
+              <ion-icon name="id-card-outline"></ion-icon>
+              <ion-label>Matrícula {{ perfil.matricula }}</ion-label>
+            </ion-chip>
+          </div>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <ion-card class="profile-card">
+      <ion-card-header>
+        <ion-card-title class="profile-card-title">Sobre</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <p class="profile-bio">{{ perfil.bio }}</p>
+      </ion-card-content>
+    </ion-card>
+
+    <div class="profile-grid">
+      <ion-card class="profile-card">
+        <ion-card-header>
+          <ion-card-title class="profile-card-title">Informações de contato</ion-card-title>
+        </ion-card-header>
+        <ion-card-content class="profile-card-content">
+          <ion-list class="profile-info-list" lines="full">
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">E-mail</p>
+                <h4 class="profile-info-value">{{ perfil.email }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">Telefone</p>
+                <h4 class="profile-info-value">{{ perfil.telefone }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">Turno</p>
+                <h4 class="profile-info-value">{{ perfil.turno }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="none">
+              <ion-label>
+                <p class="profile-info-label">Admissão</p>
+                <h4 class="profile-info-value">{{ dataAdmissaoFormatada }}</h4>
+              </ion-label>
+            </ion-item>
+          </ion-list>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card class="profile-card">
+        <ion-card-header>
+          <ion-card-title class="profile-card-title">Empresa</ion-card-title>
+        </ion-card-header>
+        <ion-card-content class="profile-card-content">
+          <ion-list class="profile-info-list" lines="full">
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">Razão social</p>
+                <h4 class="profile-info-value">{{ empresa.razaoSocial }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">CNPJ</p>
+                <h4 class="profile-info-value">{{ empresa.cnpj }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">Setor</p>
+                <h4 class="profile-info-value">{{ empresa.setor }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">Telefone</p>
+                <h4 class="profile-info-value">{{ empresa.telefoneCorporativo }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="full">
+              <ion-label>
+                <p class="profile-info-label">Site</p>
+                <h4 class="profile-info-value">{{ empresa.site }}</h4>
+              </ion-label>
+            </ion-item>
+            <ion-item class="profile-info-item" lines="none">
+              <ion-label class="ion-text-wrap">
+                <p class="profile-info-label">Endereço</p>
+                <h4 class="profile-info-value">{{ enderecoFormatado }}</h4>
+              </ion-label>
+            </ion-item>
+          </ion-list>
+        </ion-card-content>
+      </ion-card>
+    </div>
+
+  </div>
+</ion-content>

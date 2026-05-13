@@ -1,0 +1,28 @@
+{
+  "eventos": [
+    {
+      "titulo": "Acesso fora do horário",
+      "descricao": "Um funcionário registrou entrada fora do horário definido para o seu turno.",
+      "data": "12/04/2026",
+      "icone": "time-outline"
+    },
+    {
+      "titulo": "Falha de reconhecimento",
+      "descricao": "O sistema não conseguiu identificar um funcionário após múltiplas tentativas.",
+      "data": "11/04/2026",
+      "icone": "alert-circle-outline"
+    },
+    {
+      "titulo": "Novo cadastro concluído",
+      "descricao": "Um novo funcionário foi adicionado ao sistema e sua biometria foi registrada com sucesso.",
+      "data": "10/04/2026",
+      "icone": "person-add-outline"
+    },
+    {
+      "titulo": "Manutenção programada",
+      "descricao": "Manutenção preventiva agendada para a catraca principal. Previsão de 2 horas de indisponibilidade.",
+      "data": "09/04/2026",
+      "icone": "construct-outline"
+    }
+  ]
+}

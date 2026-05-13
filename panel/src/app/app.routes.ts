@@ -1,60 +1,30 @@
-import { Routes } from "@angular/router";
-
-import { authGuard } from "./core/auth/auth.guard";
+import { Routes } from '@angular/router';
 
 export const routes: Routes = [
-  // ---------- public ----------
   {
-    path: "login",
+    path: 'home',
+    loadComponent: () => import('./home/home.page').then((m) => m.HomePage),
+  },
+  {
+    path: 'dashboard',
     loadComponent: () =>
-      import("./features/login/login.page").then((m) => m.LoginPage),
+      import('./dashboard/dashboard.page').then((m) => m.DashboardPage),
+  },
+  {
+    path: '',
+    redirectTo: 'home',
+    pathMatch: 'full',
+  },
+  {
+    path: 'login',
+    loadComponent: () => import('./login/login.page').then( m => m.LoginPage)
+  },
+  {
+    path: 'cadastro',
+    loadComponent: () => import('./cadastro/cadastro.page').then( m => m.CadastroPage)
+  },  {
+    path: 'perfil',
+    loadComponent: () => import('./perfil/perfil.page').then( m => m.PerfilPage)
   },
 
-  // ---------- authenticated app ----------
-  {
-    path: "dashboard",
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import("./features/dashboard/dashboard.page").then(
-        (m) => m.DashboardPage,
-      ),
-  },
-  {
-    path: "employees",
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import("./features/employees/employees.page").then(
-        (m) => m.EmployeesPage,
-      ),
-  },
-  {
-    path: "employees/:id",
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import("./features/employee-detail/employee-detail.page").then(
-        (m) => m.EmployeeDetailPage,
-      ),
-  },
-  {
-    path: "events",
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import("./features/events/events.page").then((m) => m.EventsPage),
-  },
-  {
-    path: "reports",
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import("./features/reports/reports.page").then((m) => m.ReportsPage),
-  },
-  {
-    path: "settings",
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import("./features/settings/settings.page").then((m) => m.SettingsPage),
-  },
-
-  // ---------- defaults ----------
-  { path: "", redirectTo: "dashboard", pathMatch: "full" },
-  { path: "**", redirectTo: "dashboard" },
 ];
