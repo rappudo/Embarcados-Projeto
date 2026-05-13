@@ -71,12 +71,19 @@ target_link_libraries(facegate_vision
 add_library(facegate_mqtt STATIC
     src/mqtt/serialization.cpp
     src/mqtt/mqtt_publisher.cpp
+    src/mqtt/mqtt_subscriber.cpp
 )
 target_include_directories(facegate_mqtt
     PUBLIC ${MOSQUITTO_INCLUDE_DIRS}
 )
 target_link_libraries(facegate_mqtt
-    PUBLIC facegate_domain nlohmann_json::nlohmann_json ${MOSQUITTO_LIBRARIES} Threads::Threads
+    PUBLIC
+        facegate_domain
+        facegate_storage
+        facegate_vision
+        nlohmann_json::nlohmann_json
+        ${MOSQUITTO_LIBRARIES}
+        Threads::Threads
 )
 add_library(facegate_pipeline STATIC
     src/pipeline/pipeline.cpp

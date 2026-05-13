@@ -66,13 +66,15 @@ fn default_direction() -> String {
 
 /// Connect to the broker, subscribe to the topics, spawn the polling task.
 ///
-/// Returns as soon as the SUBSCRIBE requests are queued. The actual
-/// SUBACK and message dispatch happen in the background task.
+/// Returns the live MQTT state handle and the `AsyncClient` so HTTP
+/// handlers can publish sync messages on enrollment / deletion. The
+/// SUBSCRIBE requests are queued before returning; SUBACK and message
+/// dispatch happen in the spawned task.
 pub async fn start_subscriber(
     pool: PgPool,
     host: String,
     port: u16,
-) -> anyhow::Result<MqttStateHandle> {
+) -> anyhow::Result<(MqttStateHandle, AsyncClient)> {
     let mut opts = MqttOptions::new(CLIENT_ID, &host, port);
     opts.set_keep_alive(Duration::from_secs(30));
     // clean_session = false + stable client_id  =>  broker retains our
@@ -92,7 +94,7 @@ pub async fn start_subscriber(
     // Shared state handle — return a clone so AppState can hold its own.
     let state: MqttStateHandle = Arc::new(RwLock::new(MqttState::default()));
     tokio::spawn(run_loop(pool, eventloop, state.clone()));
-    Ok(state)
+    Ok((state, client))
 }
 
 /// Forever-loop: poll the event loop, dispatch publishes, log everything else.

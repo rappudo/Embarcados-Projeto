@@ -1,5 +1,6 @@
 #include "./matcher.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -39,6 +40,8 @@ Matcher::Matcher(std::vector<facegate::domain::Embedding> cache, float threshold
 facegate::domain::MatchResult Matcher::find_match(
     const facegate::domain::EmbeddingVector& query
 ) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     float best_distance = std::numeric_limits<float>::infinity();
     facegate::domain::EmployeeId best_owner = 0;
     bool found_any = false;
@@ -60,12 +63,15 @@ facegate::domain::MatchResult Matcher::find_match(
 }
 
 std::size_t Matcher::cache_size() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
     return cache_.size();
 }
 
 std::optional<float> Matcher::best_distance(
     const facegate::domain::EmbeddingVector& query
 ) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     if (cache_.empty()) {
         return std::nullopt;
     }
@@ -78,6 +84,37 @@ std::optional<float> Matcher::best_distance(
         }
     }
     return best;
+}
+
+void Matcher::upsert(const facegate::domain::Embedding& embedding) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = std::find_if(
+        cache_.begin(), cache_.end(),
+        [id = embedding.id](const facegate::domain::Embedding& e) {
+            return e.id == id;
+        }
+    );
+
+    if (it == cache_.end()) {
+        cache_.push_back(embedding);
+    } else {
+        *it = embedding;
+    }
+}
+
+void Matcher::remove(std::int64_t embedding_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    cache_.erase(
+        std::remove_if(
+            cache_.begin(), cache_.end(),
+            [embedding_id](const facegate::domain::Embedding& e) {
+                return e.id == embedding_id;
+            }
+        ),
+        cache_.end()
+    );
 }
 
 }  // namespace facegate::vision

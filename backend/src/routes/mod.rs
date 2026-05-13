@@ -9,6 +9,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
+use rumqttc::AsyncClient;
 use sqlx::PgPool;
 
 pub mod analytics;
@@ -23,18 +24,26 @@ use crate::mqtt::MqttStateHandle;
 /// Shared state passed to every handler via `State<AppState>`.
 /// `Clone` is cheap: `PgPool` is internally `Arc`-backed, `String`
 /// is cloned once per request, and the MQTT state is already an `Arc`.
+/// `AsyncClient` is also internally `Arc`-backed.
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
     pub jwt_secret: String,
     pub mqtt: MqttStateHandle,
+    pub mqtt_client: AsyncClient,
 }
 
-pub fn create_router(pool: PgPool, jwt_secret: String, mqtt: MqttStateHandle) -> Router {
+pub fn create_router(
+    pool: PgPool,
+    jwt_secret: String,
+    mqtt: MqttStateHandle,
+    mqtt_client: AsyncClient,
+) -> Router {
     let state = AppState {
         pool,
         jwt_secret,
         mqtt,
+        mqtt_client,
     };
 
     Router::new()

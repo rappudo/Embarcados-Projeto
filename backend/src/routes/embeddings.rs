@@ -1,15 +1,4 @@
 //! Face embedding storage.
-//!
-//! Endpoints:
-//!   POST /employees/:id/embeddings   — store a new 128-d vector
-//!   GET  /employees/:id/embeddings   — fetch all vectors for an employee
-//!   POST /employees/:id/enroll       — accept an image, derive an embedding,
-//!                                       store it. Demo-grade.
-//!
-//! Used by the edge enrollment flow to upload MobileFaceNet outputs to
-//! the backend. The edge runtime can also call GET to rebuild its local
-//! SQLite cache after a reinstall (this is the "sync to edge" half of
-//! Phase 4.5).
 
 use axum::{
     Json,
@@ -19,16 +8,47 @@ use axum::{
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use chrono::{DateTime, Utc};
 use pgvector::Vector;
+use rumqttc::{AsyncClient, QoS};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tracing::{error, info, warn};
+
+const SYNC_UPSERT_PREFIX: &str = "facegate/sync/embeddings/upsert";
+
+// --- NEW ML IMPORTS ---
+use ndarray::Array4;
+use ort::session::{Session, builder::GraphOptimizationLevel};
+use ort::value::TensorRef;
+use std::sync::{Mutex, OnceLock};
 
 use super::AppState;
 use super::auth::Claims;
 
-/// MobileFaceNet output dimension. Must match `embeddings.vector(128)`
-/// in `00_init.sql` exactly.
-const EMBEDDING_DIM: usize = 128;
+const EMBEDDING_DIM: usize = 512;
+const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
+
+// ---------- Global ONNX Session ----------
+
+static ONNX_SESSION: OnceLock<Mutex<Session>> = OnceLock::new();
+
+/// Lazy-loads the ONNX model into memory on the first enrollment.
+fn get_session() -> Result<&'static Mutex<Session>, &'static str> {
+    if let Some(s) = ONNX_SESSION.get() {
+        return Ok(s);
+    }
+
+    info!("Carregando modelo ArcFace ONNX...");
+    let model_path = "../edge/models/arc.onnx";
+
+    let session = Session::builder()
+        .map_err(|_| "Failed to build ONNX session")?
+        .with_optimization_level(GraphOptimizationLevel::Level3)
+        .map_err(|_| "Failed to set optimization level")?
+        .commit_from_file(model_path)
+        .map_err(|_| "Failed to load ONNX model. Verify the file path!")?;
+
+    let _ = ONNX_SESSION.set(Mutex::new(session));
+    Ok(ONNX_SESSION.get().expect("session was just set"))
+}
 
 // ---------- wire types ----------
 
@@ -53,6 +73,50 @@ struct EmbeddingRow {
     created_at: DateTime<Utc>,
 }
 
+// ---------- MQTT sync payload (mirrors edge JSON parser) ----------
+
+#[derive(Serialize)]
+struct EmbeddingSyncMsg<'a> {
+    embedding_id: i32,
+    employee_id: i32,
+    vector: &'a [f32],
+    created_at_ms: i64,
+}
+
+/// Publish the embedding to facegate/sync/embeddings/upsert/{id} with
+/// retain=true so any edge subscribing later receives the live state.
+/// Best-effort: failure is logged but does not fail the HTTP request,
+/// since Postgres is the source of truth and a reconciler can re-sync.
+async fn publish_embedding_upsert(
+    client: &AsyncClient,
+    embedding_id: i32,
+    employee_id: i32,
+    vector: &[f32],
+    created_at: DateTime<Utc>,
+) {
+    let topic = format!("{}/{}", SYNC_UPSERT_PREFIX, embedding_id);
+    let payload = match serde_json::to_vec(&EmbeddingSyncMsg {
+        embedding_id,
+        employee_id,
+        vector,
+        created_at_ms: created_at.timestamp_millis(),
+    }) {
+        Ok(p) => p,
+        Err(e) => {
+            error!("failed to serialize embedding sync payload: {:?}", e);
+            return;
+        }
+    };
+    if let Err(e) = client
+        .publish(&topic, QoS::AtLeastOnce, /*retain=*/ true, payload)
+        .await
+    {
+        error!("MQTT publish to {} failed: {:?}", topic, e);
+    } else {
+        info!("MQTT sync published: {}", topic);
+    }
+}
+
 impl From<EmbeddingRow> for EmbeddingResponse {
     fn from(r: EmbeddingRow) -> Self {
         Self {
@@ -72,7 +136,7 @@ pub async fn create(
     Json(body): Json<CreateEmbedding>,
 ) -> Result<(StatusCode, Json<EmbeddingResponse>), (StatusCode, &'static str)> {
     if body.vector.len() != EMBEDDING_DIM {
-        return Err((StatusCode::BAD_REQUEST, "vector must be exactly 128 floats"));
+        return Err((StatusCode::BAD_REQUEST, "vector must be exactly 512 floats"));
     }
 
     let vec = Vector::from(body.vector);
@@ -87,9 +151,6 @@ pub async fn create(
     .fetch_one(&state.pool)
     .await
     .map_err(|e| {
-        // Foreign key violation = employee_id doesn't exist.
-        // We map this to 404 instead of a generic 500 so the caller
-        // gets a clear, actionable error.
         if let Some(db_err) = e.as_database_error() {
             if db_err.is_foreign_key_violation() {
                 return (StatusCode::NOT_FOUND, "employee not found");
@@ -103,6 +164,17 @@ pub async fn create(
         "embedding created: id={} for employee_id={}",
         row.id, employee_id
     );
+
+    let vector_slice: Vec<f32> = row.vector.clone().into();
+    publish_embedding_upsert(
+        &state.mqtt_client,
+        row.id,
+        employee_id,
+        &vector_slice,
+        row.created_at,
+    )
+    .await;
+
     Ok((StatusCode::CREATED, Json(row.into())))
 }
 
@@ -113,9 +185,6 @@ pub async fn list(
     State(state): State<AppState>,
     Path(employee_id): Path<i32>,
 ) -> Result<Json<Vec<EmbeddingResponse>>, (StatusCode, &'static str)> {
-    // Explicit existence check so we can return 404 vs an empty list.
-    // (Empty list is ambiguous: "no such employee" or "employee has
-    // no enrolled face yet"? Better to distinguish.)
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM employees WHERE id = $1)")
         .bind(employee_id)
         .fetch_one(&state.pool)
@@ -150,38 +219,17 @@ pub async fn list(
 
 // ---------- POST /employees/:id/enroll ----------
 
-/// Reject payloads larger than this. A 5MB base64 string decodes to
-/// ~3.7MB of raw bytes, which is generous for an enrollment photo.
-const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
-
 #[derive(Deserialize)]
 pub struct EnrollBody {
-    /// Raw base64 (data URLs allowed; we strip the prefix).
     pub image_base64: String,
 }
 
-/// POST /employees/:id/enroll
-///
-/// Demo path: accepts a base64-encoded image from the panel's browser
-/// webcam, derives a *deterministic stub* 128-d embedding from a hash
-/// of the image bytes, and stores it in `embeddings`. The wire format
-/// and side effects match the real edge enrollment, so the rest of the
-/// stack works unchanged.
-///
-/// FIXME: stub embedding — replace with real ONNX inference.
-///   To do this properly, swap out `stub_embedding_from_bytes` for an
-///   `ort` (Rust ONNX Runtime) session running MobileFaceNet against
-///   the decoded image. The model file is the same one the edge uses
-///   (`edge/models/mobilefacenet.onnx`). The vector dimension must
-///   stay at 128 to match the DB schema.
 pub async fn enroll(
     _claims: Claims,
     State(state): State<AppState>,
     Path(employee_id): Path<i32>,
     Json(body): Json<EnrollBody>,
 ) -> Result<(StatusCode, Json<EmbeddingResponse>), (StatusCode, &'static str)> {
-    // Tolerate "data:image/...;base64," prefixes the browser produces
-    // from canvas.toDataURL().
     let b64 = body
         .image_base64
         .split(",")
@@ -200,7 +248,16 @@ pub async fn enroll(
         return Err((StatusCode::PAYLOAD_TOO_LARGE, "image too large (max 5MB)"));
     }
 
-    let vec = Vector::from(stub_embedding_from_bytes(&image_bytes));
+    // Process the image through ONNX instead of the stub!
+    let vector_data = generate_embedding_from_bytes(&image_bytes).map_err(|e| {
+        error!("ONNX inference error: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "AI model inference failed",
+        )
+    })?;
+
+    let vec = Vector::from(vector_data);
 
     let row = sqlx::query_as::<_, EmbeddingRow>(
         "INSERT INTO embeddings (employee_id, vector)
@@ -222,44 +279,78 @@ pub async fn enroll(
     })?;
 
     info!(
-        "enroll stub-embedding stored: id={} for employee_id={} from {} image bytes",
+        "Real AI embedding stored: id={} for employee_id={}",
+        row.id, employee_id
+    );
+
+    let vector_slice: Vec<f32> = row.vector.clone().into();
+    publish_embedding_upsert(
+        &state.mqtt_client,
         row.id,
         employee_id,
-        image_bytes.len()
-    );
+        &vector_slice,
+        row.created_at,
+    )
+    .await;
+
     Ok((StatusCode::CREATED, Json(row.into())))
 }
 
-/// Produce a deterministic 128-d vector from arbitrary input bytes.
-///
-/// We hash the input with SHA-256 (32 bytes), then expand to 128 floats
-/// by re-hashing each 8-byte chunk and unpacking as 4 little-endian
-/// f32s normalised into [-1, 1]. The result has no relationship to
-/// face features — the wizard, the DB write, and the response shape
-/// all behave identically to the real pipeline, but matching against
-/// these vectors will never find anyone. Adequate for the demo only.
-fn stub_embedding_from_bytes(bytes: &[u8]) -> Vec<f32> {
-    let seed = Sha256::digest(bytes);
-    let mut out = Vec::with_capacity(128);
-    for chunk_idx in 0..32u32 {
-        // Re-hash (seed || chunk_idx) so each chunk depends on all input.
-        let mut h = Sha256::new();
-        h.update(seed);
-        h.update(chunk_idx.to_le_bytes());
-        let block = h.finalize();
-        for i in 0..4 {
-            let start = i * 4;
-            let raw = u32::from_le_bytes([
-                block[start],
-                block[start + 1],
-                block[start + 2],
-                block[start + 3],
-            ]);
-            // Map to [-1, 1] for plausibility in cosine-distance space.
-            let v = (raw as f32 / u32::MAX as f32) * 2.0 - 1.0;
-            out.push(v);
-        }
+// ---------- Real ONNX Inference Logic ----------
+
+/// Decodes the image, resizes to 112x112, normalizes the RGB values,
+/// and passes the tensor through the MobileFaceNet ONNX model.
+fn generate_embedding_from_bytes(bytes: &[u8]) -> Result<Vec<f32>, &'static str> {
+    // 1. Load and resize the image
+    let img = image::load_from_memory(bytes).map_err(|_| "Failed to decode image bytes")?;
+    let resized = img.resize_exact(112, 112, image::imageops::FilterType::Triangle);
+    let rgb = resized.into_rgb8();
+
+    // 2. Prepare the tensor [batch_size, height, width, channels] -> [1, 112, 112, 3] (NHWC)
+    let mut input_tensor = Array4::<f32>::zeros((1, 112, 112, 3));
+    for (x, y, pixel) in rgb.enumerate_pixels() {
+        // Standard ArcFace normalization: (pixel_value - 127.5) / 127.5
+        input_tensor[[0, y as usize, x as usize, 0]] = (pixel[0] as f32 - 127.5) / 127.5;
+        input_tensor[[0, y as usize, x as usize, 1]] = (pixel[1] as f32 - 127.5) / 127.5;
+        input_tensor[[0, y as usize, x as usize, 2]] = (pixel[2] as f32 - 127.5) / 127.5;
     }
-    debug_assert_eq!(out.len(), EMBEDDING_DIM);
-    out
+
+    // 3. Run the ONNX Session
+    let session_lock = get_session()?;
+    let mut session = session_lock
+        .lock()
+        .map_err(|_| "ONNX session mutex poisoned")?;
+
+    let input_value =
+        TensorRef::from_array_view(&input_tensor).map_err(|_| "Failed to build input tensor")?;
+
+    // `name()` returns `&str` borrowed from `session`; `.to_string()` makes it owned
+    // so the immutable borrow is released before we call `session.run(..)` below.
+    let expected_input_name = session.inputs()[0].name().to_string();
+
+    tracing::info!(
+        "The model expects the input name to be: {}",
+        expected_input_name
+    );
+
+    // Pass the cloned name into the macro
+    let outputs = session
+        .run(ort::inputs![expected_input_name.as_str() => input_value])
+        .map_err(|e| {
+            tracing::error!("ONNX Run Error details: {:?}", e);
+            "Model execution failed"
+        })?;
+
+    // 4. Extract the 512-d output vector
+    let (_shape, output_data) = outputs[0]
+        .try_extract_tensor::<f32>()
+        .map_err(|_| "Failed to extract output tensor")?;
+
+    let vec: Vec<f32> = output_data.to_vec();
+
+    if vec.len() != EMBEDDING_DIM {
+        return Err("Model output dimension mismatch. Expected 512.");
+    }
+
+    Ok(vec)
 }

@@ -4,10 +4,15 @@
 
 -- -----------------------------------------------------------------------------
 -- Embeddings cadastrados no dispositivo.
--- Populado pelo CLI de enrollment. Carregado pelo app principal no boot.
+-- Produtor primário: subscriber MQTT (facegate/sync/embeddings/upsert/+),
+-- usando o `embedding_id` atribuído pelo Postgres do backend como chave.
+-- Produtor secundário (dev/offline): CLI de enrollment — sem id explícito,
+-- o SQLite gera o ROWID automaticamente (INTEGER PRIMARY KEY sem
+-- AUTOINCREMENT já é alias do ROWID).
+-- Carregado pelo app principal no boot via Storage::load_all_embeddings.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS embeddings (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          INTEGER PRIMARY KEY,
     employee_id INTEGER NOT NULL,
     vector      BLOB    NOT NULL,
     created_at  INTEGER NOT NULL
