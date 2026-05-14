@@ -1,6 +1,7 @@
 
 Bem vindo à documentação oficial do FaceGateway!
 
+
 ## tópicos
 ---
 
@@ -9,5 +10,4 @@ Bem vindo à documentação oficial do FaceGateway!
 - [[Sobre o back-end]]:
 - [[Sobre o microcontrolador]]:
 - [[Estatísticas do projeto]]:
-- [[Referências]]:
 
