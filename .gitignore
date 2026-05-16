@@ -1,31 +1,10 @@
-# =============================================================
-#  FaceGateway — project-wide .gitignore
-# =============================================================
-
-# -------------------------------------------------------------
-#  Secrets
-# -------------------------------------------------------------
-# Never commit real .env files. Track .env.example instead so
-# new contributors know which keys are needed.
 .env
 .env.local
 .env.*.local
 !.env.example
 !*.env.example
-
-# -------------------------------------------------------------
-#  Rust backend (cargo build output)
-# -------------------------------------------------------------
-# This is the big one — gigabytes of compiled deps.
 backend/target/
 target/
-
-# Cargo.lock SHOULD be committed for binary crates (your
-# `backend` is a binary), so we don't ignore it.
-
-# -------------------------------------------------------------
-#  Angular / Ionic frontend
-# -------------------------------------------------------------
 panel/node_modules/
 panel/.angular/
 panel/dist/
@@ -33,12 +12,6 @@ panel/www/
 panel/coverage/
 panel/.firebase/
 panel/.sourcemaps/
-
-# package-lock.json should usually be committed.
-
-# -------------------------------------------------------------
-#  C++ edge (CMake)
-# -------------------------------------------------------------
 edge/build/
 edge/build-*/
 edge/cmake-build-*/
@@ -53,55 +26,19 @@ edge/*.a
 edge/*.so
 edge/*.dylib
 edge/*.exe
-
-# -------------------------------------------------------------
-#  Local databases / caches generated at runtime
-# -------------------------------------------------------------
-# Edge offline event queue (SQLite).
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
 *.db
 *.db-journal
-
-# pgvector / postgres dump files
 *.sql.bak
 *.dump
-
-# -------------------------------------------------------------
-#  ML model files (large binaries — distribute out-of-band)
-# -------------------------------------------------------------
-# Models live under edge/models/ and are downloaded per the README.
-# If you ever want to version them, use git-lfs — they will blow up
-# the repo otherwise (arc.onnx alone is ~137 MB).
 *.onnx
 *.tflite
 *.pt
 *.pb
-
-# -------------------------------------------------------------
-#  Local edge configuration
-# -------------------------------------------------------------
-# config.toml carries device-specific values (camera URL/path, GPIO
-# pins, broker IP). Treat it like .env — track config.example.toml
-# only, and let each operator keep their own config.toml locally.
 edge/config/config.toml
-
-# -------------------------------------------------------------
-#  Frontend / panel — handled by another teammate
-# -------------------------------------------------------------
-# I do not develop in panel/. Ignoring it here prevents *new*
-# untracked files inside panel/ from being staged by accident.
-# Note: .gitignore does NOT stop already-tracked files from being
-# committed if you modify them — use `git restore panel/` to drop
-# accidental local edits, or `git update-index --skip-worktree <file>`
-# for stronger per-file protection.
-panel/
-
-# -------------------------------------------------------------
-#  IDE & editor files
-# -------------------------------------------------------------
 .vscode/
 .idea/
 *.swp
@@ -109,28 +46,16 @@ panel/
 *~
 .DS_Store
 Thumbs.db
-
-# -------------------------------------------------------------
-#  Logs and temp
-# -------------------------------------------------------------
 *.log
 logs/
 tmp/
 .tmp/
-
-# -------------------------------------------------------------
-#  Python (in case you have any analysis scripts)
-# -------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .venv/
 venv/
-
-# -------------------------------------------------------------
-#  LaTeX (your Main.tex generates these)
-# -------------------------------------------------------------
 *.aux
 *.bbl
 *.blg
