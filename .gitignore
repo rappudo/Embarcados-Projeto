@@ -67,6 +67,3 @@ venv/
 *.synctex.gz
 *.toc
 *.run.xml
-# Keep the PDF? Up to you. Comment out the next line if you want
-# the compiled report committed.
-# *.pdf
