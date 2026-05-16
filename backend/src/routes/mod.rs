@@ -11,6 +11,7 @@ use axum::{
 };
 use rumqttc::AsyncClient;
 use sqlx::PgPool;
+use tower_http::services::ServeDir;
 
 pub mod analytics;
 pub mod auth;
@@ -63,8 +64,10 @@ pub fn create_router(
             "/employees/:id/embeddings",
             get(embeddings::list).post(embeddings::create),
         )
-        // Browser-driven enrollment (demo path — see embeddings::enroll docs).
-        .route("/employees/:id/enroll", post(embeddings::enroll))
+        // ONNX models served as static assets for in-browser inference.
+        // The face image never traverses the network — the panel runs
+        // BlazeFace + ArcFace locally and only uploads the 512-d vector.
+        .nest_service("/models", ServeDir::new("../edge/models"))
         // ----- users (protected, single-tier auth) -----
         .route("/users", get(users::list).post(users::create))
         // ----- system status (protected) -----

@@ -2,11 +2,12 @@
 
 #include <chrono>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
 #include "hardware/camera.hpp"
-#include "hardware/relay.hpp"
+#include "hardware/turnstile.hpp"
 #include "hardware/buzzer.hpp"
 #include "vision/face_detector.hpp"
 #include "vision/face_embedder.hpp"
@@ -23,23 +24,27 @@ Pipeline::Pipeline(
     facegate::vision::FaceDetector& detector,
     facegate::vision::FaceEmbedder& embedder,
     facegate::vision::Matcher& matcher,
-    facegate::hardware::Relay& relay,
+    facegate::hardware::Turnstile& turnstile,
     facegate::hardware::Buzzer& buzzer,
     facegate::storage::Storage& storage,
     facegate::mqtt::MqttPublisher& publisher,
     std::string device_id,
-    int heartbeat_interval_seconds
+    int heartbeat_interval_seconds,
+    int idle_reset_seconds,
+    int unknown_throttle_seconds
 )
     : camera_(camera),
       detector_(detector),
       embedder_(embedder),
       matcher_(matcher),
-      relay_(relay),
+      turnstile_(turnstile),
       buzzer_(buzzer),
       storage_(storage),
       publisher_(publisher),
       device_id_(std::move(device_id)),
-      heartbeat_interval_seconds_(heartbeat_interval_seconds) {
+      heartbeat_interval_seconds_(heartbeat_interval_seconds),
+      idle_reset_(idle_reset_seconds),
+      unknown_throttle_(unknown_throttle_seconds) {
     try {
         main_thread_ = std::thread(&Pipeline::main_loop, this);
         auxiliary_thread_ = std::thread(&Pipeline::auxiliary_loop, this);
@@ -99,6 +104,17 @@ void try_publish_or_enqueue(
 }  // namespace
 
 void Pipeline::main_loop() {
+    using steady = std::chrono::steady_clock;
+
+    // Dedup state. We run at ~30 fps so without this the system would emit
+    // ~180 events/min for someone standing in front of the camera. Instead we
+    // emit only on meaningful transitions.
+    std::optional<facegate::domain::AccessStatus> last_status;
+    std::optional<facegate::domain::EmployeeId> last_employee;
+    steady::time_point last_face_seen_at{};
+    steady::time_point last_unknown_emitted_at{};
+    bool ever_seen_face = false;
+
     while (!stop_.load()) {
         auto frame_opt = camera_.capture();
         if (!frame_opt) {
@@ -130,28 +146,77 @@ void Pipeline::main_loop() {
 
         auto match_result = matcher_.find_match(*embedding_opt);
 
+        const auto current = steady::now();
+        const bool face_was_absent =
+            ever_seen_face && (current - last_face_seen_at) > idle_reset_;
+
+        // Idle reset: if no face was seen for idle_reset_ seconds, forget the
+        // last decision so the next person (even the same one) emits fresh.
+        if (face_was_absent) {
+            last_status.reset();
+            last_employee.reset();
+        }
+
+        bool should_emit = false;
         facegate::domain::AccessEvent event;
         event.timestamp = now();
 
         if (match_result.has_value()) {
-                    std::cerr << "Pipeline: MATCH employee=" << match_result->employee
-                              << " distance=" << match_result->distance << "\n";
-                    event.status = facegate::domain::AccessStatus::Granted;
-                    event.employee = match_result->employee;
-                    event.distance = match_result->distance;
+            event.status = facegate::domain::AccessStatus::Granted;
+            event.employee = match_result->employee;
+            event.distance = match_result->distance;
 
-                    relay_.grant_access();
-                } else {
-                    std::cerr << "Pipeline: no match (rejected by threshold)\n";
-                    event.status = facegate::domain::AccessStatus::Unknown;
-                    event.employee = std::nullopt;
-                    event.distance = std::nullopt;
+            // Emit on first sighting, after idle reset, or when a different
+            // employee appears. Same employee held in view → silent.
+            const bool first_time = !last_status.has_value();
+            const bool different_employee =
+                last_status == facegate::domain::AccessStatus::Granted &&
+                last_employee != match_result->employee;
+            const bool was_unknown_before =
+                last_status == facegate::domain::AccessStatus::Unknown;
 
-                    buzzer_.beep_denied();
-                }
+            if (first_time || different_employee || was_unknown_before) {
+                should_emit = true;
+                std::cerr << "Pipeline: MATCH employee=" << match_result->employee
+                          << " distance=" << match_result->distance << "\n";
+                // Non-blocking — turnstile thread handles the 5s open + close.
+                // Re-triggering during the open window just extends it.
+                turnstile_.grant_access();
+                last_status = facegate::domain::AccessStatus::Granted;
+                last_employee = match_result->employee;
+            }
+        } else {
+            event.status = facegate::domain::AccessStatus::Unknown;
+            event.employee = std::nullopt;
+            event.distance = std::nullopt;
 
-        auto msg = facegate::mqtt::serialize(event);
-        try_publish_or_enqueue(publisher_, storage_, msg);
+            // Unknown: emit on first sighting / transition, otherwise throttle.
+            // We don't know if it's the same person; assume same until a face
+            // has been absent long enough (handled by face_was_absent above).
+            const bool was_not_unknown =
+                !last_status.has_value() ||
+                last_status != facegate::domain::AccessStatus::Unknown;
+            const bool throttle_expired =
+                last_status == facegate::domain::AccessStatus::Unknown &&
+                (current - last_unknown_emitted_at) >= unknown_throttle_;
+
+            if (was_not_unknown || throttle_expired) {
+                should_emit = true;
+                std::cerr << "Pipeline: no match (rejected by threshold)\n";
+                buzzer_.beep_denied();
+                last_status = facegate::domain::AccessStatus::Unknown;
+                last_employee.reset();
+                last_unknown_emitted_at = current;
+            }
+        }
+
+        last_face_seen_at = current;
+        ever_seen_face = true;
+
+        if (should_emit) {
+            auto msg = facegate::mqtt::serialize(event);
+            try_publish_or_enqueue(publisher_, storage_, msg);
+        }
     }
 }
 

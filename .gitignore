@@ -70,13 +70,34 @@ edge/*.exe
 *.dump
 
 # -------------------------------------------------------------
-#  ML model files (often large; consider git-lfs if needed)
+#  ML model files (large binaries — distribute out-of-band)
 # -------------------------------------------------------------
-# Keep this commented if you DO want models in the repo.
-# *.onnx
-# *.tflite
-# *.pt
-# *.pb
+# Models live under edge/models/ and are downloaded per the README.
+# If you ever want to version them, use git-lfs — they will blow up
+# the repo otherwise (arc.onnx alone is ~137 MB).
+*.onnx
+*.tflite
+*.pt
+*.pb
+
+# -------------------------------------------------------------
+#  Local edge configuration
+# -------------------------------------------------------------
+# config.toml carries device-specific values (camera URL/path, GPIO
+# pins, broker IP). Treat it like .env — track config.example.toml
+# only, and let each operator keep their own config.toml locally.
+edge/config/config.toml
+
+# -------------------------------------------------------------
+#  Frontend / panel — handled by another teammate
+# -------------------------------------------------------------
+# I do not develop in panel/. Ignoring it here prevents *new*
+# untracked files inside panel/ from being staged by accident.
+# Note: .gitignore does NOT stop already-tracked files from being
+# committed if you modify them — use `git restore panel/` to drop
+# accidental local edits, or `git update-index --skip-worktree <file>`
+# for stronger per-file protection.
+panel/
 
 # -------------------------------------------------------------
 #  IDE & editor files

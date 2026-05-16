@@ -12,7 +12,7 @@
 #include "config/config.hpp"
 #include "domain/domain.hpp"
 #include "hardware/camera.hpp"
-#include "hardware/relay.hpp"
+#include "hardware/turnstile.hpp"
 #include "hardware/buzzer.hpp"
 #include "mqtt/mqtt_publisher.hpp"
 #include "mqtt/mqtt_subscriber.hpp"
@@ -97,18 +97,18 @@ int main(int argc, char** argv) {
         );
 
         std::cerr << "facegate: initializing GPIO\n";
-        facegate::hardware::Relay relay(
-                    kGpioChipPath,
-                    cfg.gpio.relay_pin,
-                    cfg.gpio.relay_pulse_ms,
-                    cfg.gpio.enabled
-                );
-                facegate::hardware::Buzzer buzzer(
-                    kGpioChipPath,
-                    cfg.gpio.buzzer_pin,
-                    cfg.gpio.buzzer_beep_ms,
-                    cfg.gpio.enabled
-                );
+        facegate::hardware::Turnstile turnstile(
+            kGpioChipPath,
+            cfg.gpio.servo_pin,
+            cfg.gpio.servo_open_ms,
+            cfg.gpio.enabled
+        );
+        facegate::hardware::Buzzer buzzer(
+            kGpioChipPath,
+            cfg.gpio.buzzer_pin,
+            cfg.gpio.buzzer_beep_ms,
+            cfg.gpio.enabled
+        );
 
         std::cerr << "facegate: loading vision models\n";
         facegate::vision::FaceDetector detector(
@@ -159,12 +159,14 @@ int main(int argc, char** argv) {
             detector,
             embedder,
             matcher,
-            relay,
+            turnstile,
             buzzer,
             storage,
             publisher,
             cfg.device_id,
-            cfg.mqtt.heartbeat_interval_seconds
+            cfg.mqtt.heartbeat_interval_seconds,
+            cfg.recognition.idle_reset_seconds,
+            cfg.recognition.unknown_throttle_seconds
         );
 
         while (!g_stop_requested.load()) {

@@ -39,7 +39,7 @@ target_link_libraries(facegate_config
 )
 
 add_library(facegate_hardware STATIC
-    src/hardware/relay.cpp
+    src/hardware/turnstile.cpp
     src/hardware/buzzer.cpp
     src/hardware/camera.cpp
 )
