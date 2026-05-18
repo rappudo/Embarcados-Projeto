@@ -33,12 +33,16 @@
           ></ion-input>
         </ion-item>
 
+        <ion-text *ngIf="errorMessage" color="danger" class="login-error">
+          <p>{{ errorMessage }}</p>
+        </ion-text>
+
         <ion-button
           type="submit"
           class="login-submit"
-          [disabled]="loginForm.invalid"
+          [disabled]="loginForm.invalid || loading"
         >
-          Login
+          {{ loading ? 'Entrando...' : 'Login' }}
         </ion-button>
 
         <p class="login-register-text">

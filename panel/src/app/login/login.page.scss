@@ -212,6 +212,18 @@ ion-button.login-submit[disabled]::part(native) {
   color: rgba(255, 255, 255, 0.95) !important;
 }
 
+/* Mensagem de erro */
+.login-error {
+  display: block;
+  text-align: center;
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+}
+
 /* Texto de cadastro */
 .login-register-text {
   margin: 6px 0 0;
