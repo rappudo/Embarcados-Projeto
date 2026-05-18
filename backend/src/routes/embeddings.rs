@@ -1,13 +1,9 @@
 //! Face embedding storage.
 //!
-//! Endpoints:
-//!   POST /employees/:id/embeddings   — store a new 128-d vector
-//!   GET  /employees/:id/embeddings   — fetch all vectors for an employee
-//!
-//! Used by the edge enrollment flow to upload MobileFaceNet outputs to
-//! the backend. The edge runtime can also call GET to rebuild its local
-//! SQLite cache after a reinstall (this is the "sync to edge" half of
-//! Phase 4.5).
+//! The backend never sees a face image. Embedding extraction runs in the
+//! panel (browser) and on the edge device — both have physical access to
+//! the face. This endpoint accepts the resulting 512-d vector and stores
+//! it; the raw biometric never traverses the network.
 
 use axum::{
     Json,
@@ -16,15 +12,16 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use pgvector::Vector;
+use rumqttc::{AsyncClient, QoS};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
+
+const SYNC_UPSERT_PREFIX: &str = "facegate/sync/embeddings/upsert";
 
 use super::AppState;
 use super::auth::Claims;
 
-/// MobileFaceNet output dimension. Must match `embeddings.vector(128)`
-/// in `00_init.sql` exactly.
-const EMBEDDING_DIM: usize = 128;
+const EMBEDDING_DIM: usize = 512;
 
 // ---------- wire types ----------
 
@@ -49,6 +46,50 @@ struct EmbeddingRow {
     created_at: DateTime<Utc>,
 }
 
+// ---------- MQTT sync payload (mirrors edge JSON parser) ----------
+
+#[derive(Serialize)]
+struct EmbeddingSyncMsg<'a> {
+    embedding_id: i32,
+    employee_id: i32,
+    vector: &'a [f32],
+    created_at_ms: i64,
+}
+
+/// Publish the embedding to facegate/sync/embeddings/upsert/{id} with
+/// retain=true so any edge subscribing later receives the live state.
+/// Best-effort: failure is logged but does not fail the HTTP request,
+/// since Postgres is the source of truth and a reconciler can re-sync.
+async fn publish_embedding_upsert(
+    client: &AsyncClient,
+    embedding_id: i32,
+    employee_id: i32,
+    vector: &[f32],
+    created_at: DateTime<Utc>,
+) {
+    let topic = format!("{}/{}", SYNC_UPSERT_PREFIX, embedding_id);
+    let payload = match serde_json::to_vec(&EmbeddingSyncMsg {
+        embedding_id,
+        employee_id,
+        vector,
+        created_at_ms: created_at.timestamp_millis(),
+    }) {
+        Ok(p) => p,
+        Err(e) => {
+            error!("failed to serialize embedding sync payload: {:?}", e);
+            return;
+        }
+    };
+    if let Err(e) = client
+        .publish(&topic, QoS::AtLeastOnce, /*retain=*/ true, payload)
+        .await
+    {
+        error!("MQTT publish to {} failed: {:?}", topic, e);
+    } else {
+        info!("MQTT sync published: {}", topic);
+    }
+}
+
 impl From<EmbeddingRow> for EmbeddingResponse {
     fn from(r: EmbeddingRow) -> Self {
         Self {
@@ -68,7 +109,7 @@ pub async fn create(
     Json(body): Json<CreateEmbedding>,
 ) -> Result<(StatusCode, Json<EmbeddingResponse>), (StatusCode, &'static str)> {
     if body.vector.len() != EMBEDDING_DIM {
-        return Err((StatusCode::BAD_REQUEST, "vector must be exactly 128 floats"));
+        return Err((StatusCode::BAD_REQUEST, "vector must be exactly 512 floats"));
     }
 
     let vec = Vector::from(body.vector);
@@ -83,9 +124,6 @@ pub async fn create(
     .fetch_one(&state.pool)
     .await
     .map_err(|e| {
-        // Foreign key violation = employee_id doesn't exist.
-        // We map this to 404 instead of a generic 500 so the caller
-        // gets a clear, actionable error.
         if let Some(db_err) = e.as_database_error() {
             if db_err.is_foreign_key_violation() {
                 return (StatusCode::NOT_FOUND, "employee not found");
@@ -99,6 +137,17 @@ pub async fn create(
         "embedding created: id={} for employee_id={}",
         row.id, employee_id
     );
+
+    let vector_slice: Vec<f32> = row.vector.clone().into();
+    publish_embedding_upsert(
+        &state.mqtt_client,
+        row.id,
+        employee_id,
+        &vector_slice,
+        row.created_at,
+    )
+    .await;
+
     Ok((StatusCode::CREATED, Json(row.into())))
 }
 
@@ -109,9 +158,6 @@ pub async fn list(
     State(state): State<AppState>,
     Path(employee_id): Path<i32>,
 ) -> Result<Json<Vec<EmbeddingResponse>>, (StatusCode, &'static str)> {
-    // Explicit existence check so we can return 404 vs an empty list.
-    // (Empty list is ambiguous: "no such employee" or "employee has
-    // no enrolled face yet"? Better to distinguish.)
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM employees WHERE id = $1)")
         .bind(employee_id)
         .fetch_one(&state.pool)

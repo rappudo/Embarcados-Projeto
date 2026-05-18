@@ -1,5 +1,5 @@
 #pragma once
 
 #include "./camera.hpp"
-#include "./relay.hpp"
+#include "./turnstile.hpp"
 #include "./buzzer.hpp"

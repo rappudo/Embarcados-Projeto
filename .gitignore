@@ -1,31 +1,10 @@
-# =============================================================
-#  FaceGateway — project-wide .gitignore
-# =============================================================
-
-# -------------------------------------------------------------
-#  Secrets
-# -------------------------------------------------------------
-# Never commit real .env files. Track .env.example instead so
-# new contributors know which keys are needed.
 .env
 .env.local
 .env.*.local
 !.env.example
 !*.env.example
-
-# -------------------------------------------------------------
-#  Rust backend (cargo build output)
-# -------------------------------------------------------------
-# This is the big one — gigabytes of compiled deps.
 backend/target/
 target/
-
-# Cargo.lock SHOULD be committed for binary crates (your
-# `backend` is a binary), so we don't ignore it.
-
-# -------------------------------------------------------------
-#  Angular / Ionic frontend
-# -------------------------------------------------------------
 panel/node_modules/
 panel/.angular/
 panel/dist/
@@ -33,12 +12,6 @@ panel/www/
 panel/coverage/
 panel/.firebase/
 panel/.sourcemaps/
-
-# package-lock.json should usually be committed.
-
-# -------------------------------------------------------------
-#  C++ edge (CMake)
-# -------------------------------------------------------------
 edge/build/
 edge/build-*/
 edge/cmake-build-*/
@@ -53,34 +26,19 @@ edge/*.a
 edge/*.so
 edge/*.dylib
 edge/*.exe
-
-# -------------------------------------------------------------
-#  Local databases / caches generated at runtime
-# -------------------------------------------------------------
-# Edge offline event queue (SQLite).
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
 *.db
 *.db-journal
-
-# pgvector / postgres dump files
 *.sql.bak
 *.dump
-
-# -------------------------------------------------------------
-#  ML model files (often large; consider git-lfs if needed)
-# -------------------------------------------------------------
-# Keep this commented if you DO want models in the repo.
-# *.onnx
-# *.tflite
-# *.pt
-# *.pb
-
-# -------------------------------------------------------------
-#  IDE & editor files
-# -------------------------------------------------------------
+*.onnx
+*.tflite
+*.pt
+*.pb
+edge/config/config.toml
 .vscode/
 .idea/
 *.swp
@@ -88,28 +46,16 @@ edge/*.exe
 *~
 .DS_Store
 Thumbs.db
-
-# -------------------------------------------------------------
-#  Logs and temp
-# -------------------------------------------------------------
 *.log
 logs/
 tmp/
 .tmp/
-
-# -------------------------------------------------------------
-#  Python (in case you have any analysis scripts)
-# -------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .venv/
 venv/
-
-# -------------------------------------------------------------
-#  LaTeX (your Main.tex generates these)
-# -------------------------------------------------------------
 *.aux
 *.bbl
 *.blg
@@ -121,6 +67,3 @@ venv/
 *.synctex.gz
 *.toc
 *.run.xml
-# Keep the PDF? Up to you. Comment out the next line if you want
-# the compiled report committed.
-# *.pdf

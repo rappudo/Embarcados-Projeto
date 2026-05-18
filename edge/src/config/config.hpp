@@ -22,10 +22,15 @@ struct CameraConfig {
 
 struct GpioConfig {
     bool enabled;
-    int relay_pin;
+    int servo_pin;
     int buzzer_pin;
-    int relay_pulse_ms;
+    int servo_open_ms;
     int buzzer_beep_ms;
+};
+
+struct RecognitionConfig {
+    int idle_reset_seconds;
+    int unknown_throttle_seconds;
 };
 
 struct StorageConfig {
@@ -49,6 +54,7 @@ struct Config {
     VisionConfig vision;
     CameraConfig camera;
     GpioConfig gpio;
+    RecognitionConfig recognition;
     StorageConfig storage;
     MqttConfig mqtt;
     LoggingConfig logging;

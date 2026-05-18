@@ -1,12 +1,13 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <string>
 #include <thread>
 
-namespace facegate::hardware { class Camera; class Relay; class Buzzer; }
+namespace facegate::hardware { class Camera; class Turnstile; class Buzzer; }
 namespace facegate::vision   { class FaceDetector; class FaceEmbedder; class Matcher; }
 namespace facegate::storage  { class Storage; }
 namespace facegate::mqtt     { class MqttPublisher; }
@@ -20,12 +21,14 @@ public:
         facegate::vision::FaceDetector& detector,
         facegate::vision::FaceEmbedder& embedder,
         facegate::vision::Matcher& matcher,
-        facegate::hardware::Relay& relay,
+        facegate::hardware::Turnstile& turnstile,
         facegate::hardware::Buzzer& buzzer,
         facegate::storage::Storage& storage,
         facegate::mqtt::MqttPublisher& publisher,
         std::string device_id,
-        int heartbeat_interval_seconds
+        int heartbeat_interval_seconds,
+        int idle_reset_seconds,
+        int unknown_throttle_seconds
     );
     ~Pipeline();
 
@@ -45,13 +48,15 @@ private:
     facegate::vision::FaceDetector& detector_;
     facegate::vision::FaceEmbedder& embedder_;
     facegate::vision::Matcher& matcher_;
-    facegate::hardware::Relay& relay_;
+    facegate::hardware::Turnstile& turnstile_;
     facegate::hardware::Buzzer& buzzer_;
     facegate::storage::Storage& storage_;
     facegate::mqtt::MqttPublisher& publisher_;
 
     std::string device_id_;
     int heartbeat_interval_seconds_;
+    std::chrono::seconds idle_reset_;
+    std::chrono::seconds unknown_throttle_;
 
     std::atomic<bool> stop_{false};
     std::mutex stop_mutex_;

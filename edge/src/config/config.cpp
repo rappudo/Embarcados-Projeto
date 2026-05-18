@@ -13,6 +13,7 @@ namespace {
 VisionConfig parse_vision(const toml::table& root);
 CameraConfig parse_camera(const toml::table& root);
 GpioConfig parse_gpio(const toml::table& root);
+RecognitionConfig parse_recognition(const toml::table& root);
 StorageConfig parse_storage(const toml::table& root);
 MqttConfig parse_mqtt(const toml::table& root);
 LoggingConfig parse_logging(const toml::table& root);
@@ -55,10 +56,25 @@ GpioConfig parse_gpio(const toml::table& root) {
 
     GpioConfig cfg;
     cfg.enabled = (*section)["enabled"].value_or(true);
-    cfg.relay_pin = (*section)["relay_pin"].value_or(-1);
+    cfg.servo_pin = (*section)["servo_pin"].value_or(-1);
     cfg.buzzer_pin = (*section)["buzzer_pin"].value_or(-1);
-    cfg.relay_pulse_ms = (*section)["relay_pulse_ms"].value_or(1500);
+    cfg.servo_open_ms = (*section)["servo_open_ms"].value_or(5000);
     cfg.buzzer_beep_ms = (*section)["buzzer_beep_ms"].value_or(300);
+    return cfg;
+}
+
+RecognitionConfig parse_recognition(const toml::table& root) {
+    RecognitionConfig cfg;
+    // [recognition] is optional — sensible defaults if omitted.
+    const auto* section = root["recognition"].as_table();
+    if (section) {
+        cfg.idle_reset_seconds = (*section)["idle_reset_seconds"].value_or(3);
+        cfg.unknown_throttle_seconds =
+            (*section)["unknown_throttle_seconds"].value_or(10);
+    } else {
+        cfg.idle_reset_seconds = 3;
+        cfg.unknown_throttle_seconds = 10;
+    }
     return cfg;
 }
 
@@ -128,19 +144,26 @@ void validate(const Config& cfg) {
     }
 
     if (cfg.gpio.enabled) {
-            if (cfg.gpio.relay_pin < 0) {
-                throw std::runtime_error("Config: gpio.relay_pin is required (positive integer)");
+            if (cfg.gpio.servo_pin < 0) {
+                throw std::runtime_error("Config: gpio.servo_pin is required (positive integer)");
             }
             if (cfg.gpio.buzzer_pin < 0) {
                 throw std::runtime_error("Config: gpio.buzzer_pin is required (positive integer)");
             }
-            if (cfg.gpio.relay_pin == cfg.gpio.buzzer_pin) {
-                throw std::runtime_error("Config: gpio.relay_pin and gpio.buzzer_pin must differ");
+            if (cfg.gpio.servo_pin == cfg.gpio.buzzer_pin) {
+                throw std::runtime_error("Config: gpio.servo_pin and gpio.buzzer_pin must differ");
             }
-            if (cfg.gpio.relay_pulse_ms <= 0 || cfg.gpio.buzzer_beep_ms <= 0) {
-                throw std::runtime_error("Config: gpio pulse/beep durations must be positive");
+            if (cfg.gpio.servo_open_ms <= 0 || cfg.gpio.buzzer_beep_ms <= 0) {
+                throw std::runtime_error("Config: gpio servo/buzzer durations must be positive");
             }
         }
+
+    if (cfg.recognition.idle_reset_seconds <= 0) {
+        throw std::runtime_error("Config: recognition.idle_reset_seconds must be positive");
+    }
+    if (cfg.recognition.unknown_throttle_seconds <= 0) {
+        throw std::runtime_error("Config: recognition.unknown_throttle_seconds must be positive");
+    }
 
     if (cfg.storage.sqlite_path.empty()) {
         throw std::runtime_error("Config: storage.sqlite_path is required");
@@ -188,6 +211,7 @@ Config load_config(const std::filesystem::path& path) {
     cfg.vision = parse_vision(root);
     cfg.camera = parse_camera(root);
     cfg.gpio = parse_gpio(root);
+    cfg.recognition = parse_recognition(root);
     cfg.storage = parse_storage(root);
     cfg.mqtt = parse_mqtt(root);
     cfg.logging = parse_logging(root);

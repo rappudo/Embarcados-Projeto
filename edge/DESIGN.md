@@ -109,7 +109,8 @@ Structs (campos no header):
 - `Config` — raiz, agrega todas as seções + `device_id`.
 - `VisionConfig` — threshold, paths dos modelos ONNX, threads do ONNXRuntime.
 - `CameraConfig` — device path, largura, altura, fps.
-- `GpioConfig` — pinos do relé e buzzer, duração do pulso e beep.
+- `GpioConfig` — pinos do servo e buzzer (`servo_pin`, `buzzer_pin`), duração da janela aberta (`servo_open_ms`) e do beep (`buzzer_beep_ms`), flag `enabled`.
+- `RecognitionConfig` — `idle_reset_seconds`, `unknown_throttle_seconds`. Parâmetros da deduplicação de notificações (ver `pipeline/`).
 - `StorageConfig` — path do SQLite local.
 - `MqttConfig` — host/porta do broker, client_id, keepalive, intervalo do heartbeat.
 - `LoggingConfig` — nível de log.
@@ -121,8 +122,9 @@ Funções:
 - `device_id`, paths de modelo, device da câmera, `sqlite_path`, `broker_host`, `client_id` são obrigatórios.
 - `vision.threshold ∈ [0.0, 2.0]`.
 - `camera.width`, `camera.height`, `camera.fps`, `vision.onnx_threads` positivos.
-- `gpio.relay_pin`, `gpio.buzzer_pin` não-negativos e distintos entre si.
-- `gpio.relay_pulse_ms`, `gpio.buzzer_beep_ms`, `mqtt.keepalive_seconds`, `mqtt.heartbeat_interval_seconds` positivos.
+- Quando `gpio.enabled = true`: `gpio.servo_pin`, `gpio.buzzer_pin` não-negativos e distintos entre si; `gpio.servo_open_ms`, `gpio.buzzer_beep_ms` positivos.
+- `recognition.idle_reset_seconds`, `recognition.unknown_throttle_seconds` positivos. Seção `[recognition]` ausente é tolerada — defaults `3` e `10` aplicados.
+- `mqtt.keepalive_seconds`, `mqtt.heartbeat_interval_seconds` positivos.
 - `mqtt.broker_port ∈ [1, 65535]`.
 - `logging.level ∈ {trace, debug, info, warn, error}`.
 
@@ -137,15 +139,15 @@ Funções:
 
 ### `src/hardware/`
 
-**Propósito:** Encapsula os recursos físicos do dispositivo — câmera, relé da catraca e buzzer — em classes RAII que adquirem recurso no construtor e liberam no destrutor. Esconde detalhes das libs de baixo nível (`libgpiod` via PIMPL; OpenCV vaza na API pública da câmera porque `cv::Mat` é consumido diretamente pelo pipeline).
+**Propósito:** Encapsula os recursos físicos do dispositivo — câmera, servo da catraca e buzzer — em classes RAII que adquirem recurso no construtor e liberam no destrutor. Esconde detalhes das libs de baixo nível (`libgpiod` via PIMPL; OpenCV vaza na API pública da câmera porque `cv::Mat` é consumido diretamente pelo pipeline).
 
-**Dependências:** stdlib (`<atomic>`, `<mutex>`, `<thread>`, `<chrono>`, `<optional>`, `<string>`), OpenCV (`opencv2/core.hpp`, `opencv2/videoio.hpp`), libgpiod (v2).
+**Dependências:** stdlib (`<atomic>`, `<condition_variable>`, `<mutex>`, `<thread>`, `<chrono>`, `<optional>`, `<string>`), OpenCV (`opencv2/core.hpp`, `opencv2/videoio.hpp`), libgpiod (v2).
 
 **Arquivos:**
 
 | Arquivo | Conteúdo |
 |---|---|
-| `relay.hpp` / `relay.cpp` | Classe `Relay` — saída GPIO para acionar catraca |
+| `turnstile.hpp` / `turnstile.cpp` | Classe `Turnstile` — controla servo SG90 da catraca via PWM por software |
 | `buzzer.hpp` / `buzzer.cpp` | Classe `Buzzer` — saída GPIO para sinalizar acesso negado |
 | `camera.hpp` / `camera.cpp` | Classe `Camera` — captura contínua com latest-frame buffer |
 | `hardware.hpp` | Umbrella header |
@@ -153,14 +155,15 @@ Funções:
 **API pública:**
 
 ```cpp
-class Relay {
-   Relay(const char* chip_path, int line_offset, int pulse_ms);
-   void grant_access();  // pulsa pulse_ms, bloqueante
+class Turnstile {
+   Turnstile(const char* chip_path, int line_offset, int open_hold_ms,
+             bool enabled, int open_pulse_us = 2000);
+   void grant_access();   // não-bloqueante; (re)arma janela aberta
 };
 
 class Buzzer {
-   Buzzer(const char* chip_path, int line_offset, int beep_ms);
-   void beep_denied();   // pulsa beep_ms, bloqueante
+   Buzzer(const char* chip_path, int line_offset, int beep_ms, bool enabled);
+   void beep_denied();    // pulsa beep_ms, bloqueante
 };
 
 class Camera {
@@ -174,24 +177,30 @@ Todas as três classes são **não-copiáveis e não-móveis** (cópia/move `= d
 **Invariantes e contratos:**
 - Construtores jogam `std::runtime_error` em falha de setup (chip GPIO inacessível, linha ocupada, câmera não abre). Caso não tome exceção, objeto está pronto pra uso.
 - Operações em runtime (`grant_access`, `beep_denied`, `capture`) não jogam: retornam silenciosamente ou `std::nullopt` em falha. Consumidor decide o que fazer.
-- `grant_access` e `beep_denied` **bloqueiam a thread chamadora** pela duração configurada. Nunca devem rodar na thread que faz captura/inferência.
+- `Turnstile::grant_access` é **não-bloqueante**: apenas bumpa um timestamp `open_until_` protegido por mutex e notifica a thread interna. Pode ser chamado a 30 fps sem efeito adverso — chamadas durante a janela aberta só *estendem* a janela, nunca reiniciam o ciclo abre/fecha.
+- `Buzzer::beep_denied` **bloqueia** a thread chamadora por `beep_ms`. Não deve rodar na thread que faz captura/inferência se a duração for significativa.
 - `Camera::capture` retorna um `cv::Mat` **clonado** — dono independente do buffer. Chamador pode segurar/modificar livremente.
 - Até o primeiro frame ser capturado após o boot, `capture()` retorna `nullopt`.
+- A thread interna do `Turnstile` dorme em condvar enquanto fechado; a linha GPIO permanece em LOW (servo de-energizado). Acorda em `grant_access`, pulsa a 50 Hz até `open_until_` expirar, e volta a dormir com a linha em LOW.
 
 **Decisões de projeto:**
-- **PIMPL em `Relay` e `Buzzer`** pra esconder `<gpiod.h>` do resto do código; tipos libgpiod nunca vazam pra outros módulos. Trocar a lib é mudança local.
+- **PIMPL em `Turnstile` e `Buzzer`** pra esconder `<gpiod.h>` do resto do código; tipos libgpiod nunca vazam pra outros módulos. Trocar a lib é mudança local.
 - **PIMPL parcial em `Camera`**: `cv::VideoCapture` escondido no `Impl`, mas `cv::Mat` vaza na assinatura pública porque `vision/` consome direto. Não vale esconder.
 - **Nomes semânticos em vez de mecânicos** (`grant_access`, `beep_denied`, não `pulse(ms)`). Duração vive dentro da classe; chamador declara intenção, não mecanismo.
-- **`Relay` e `Buzzer` mantidos como classes separadas** mesmo com implementação quase idêntica. Semântica pública diferente (rule of three ainda não atingida; refatorar pra helper comum quando surgir terceira saída GPIO).
+- **`Turnstile` com thread interna** (diferente de `Buzzer`, que ainda bloqueia). Motivo: o servo precisa de pulsos contínuos a 50 Hz durante toda a janela aberta (5s default). Bloquear o `main_loop` da pipeline por 5s congelaria o reconhecimento. A thread emite PWM em background e a chamada de `grant_access` retorna imediatamente.
+- **PWM apenas durante a janela aberta** (não contínuo). Quando fechado, a linha fica em LOW e o servo é totalmente de-energizado — não consome corrente, não trepida, não há jitter audível. Confia em viés mecânico (peso da haste, mola, ou gravidade no eixo correto) para manter a posição fechada. Alternativa rejeitada: PWM contínuo segurando posição fechada — funciona, mas mantém o SG90 energizado permanentemente, esquentando e desgastando o motor.
+- **Software PWM via libgpiod** (não hardware PWM). Pi 4 tem duas linhas de hardware PWM (GPIO 12/13 ou 18/19), mas requer `pigpio` ou acesso direto ao registrador. Software PWM via `gpiod_line_request_set_value` + `sleep_for` tem jitter de ~50-100µs (Linux não-RT), o que se traduz em ~5° de erro angular — aceitável para uma catraca de barra que só precisa girar pra ~90°. Se virar problema, migrar pra hardware PWM é localizado a este arquivo.
+- **Re-trigger estende a janela, não reinicia ciclo** (`new_target > open_until_` check). Com a deduplicação a 30 fps já não dispara mais por frame, mas mesmo se disparasse, o servo só veria pulsos contínuos a 50 Hz — sem comando de "fecha" → "abre" intermitente, que era o cenário que quebraria o motor.
 - **Latest-frame buffer** na Camera: thread dedicada captura em loop infinito sobrescrevendo um único slot protegido por mutex; `capture()` retorna sempre o mais recente, frames antigos descartados por sobrescrita. Latência limitada a um intervalo de frame, não acumulativa.
 - **`clone()` obrigatório em `capture()`** — sem ele, o consumer teria uma referência compartilhada (cv::Mat é reference-counted) e a thread de captura mutaria os pixels durante a inferência.
 - **Log por transição de estado** na thread de captura: loga falha após 30 leituras consecutivas (~1s), loga recuperação ao voltar a funcionar. Não loga por frame. Usa `std::cerr` provisoriamente até existir módulo de logging.
 - **Destrutor manual obrigatório na `Camera`**: ordem fixa é (1) `stop_ = true`, (2) `thread.join()`, (3) liberar `VideoCapture`. Inverter (1) e (2) causa deadlock; inverter (2) e (3) causa UB.
+- **Destrutor do `Turnstile`** sinaliza `stop_ = true`, notifica condvar (pra desbloquear da espera ociosa), join na thread, depois força linha em LOW antes de liberar a request — garante que o servo fica de-energizado quando o processo sai.
 - **Sem timeout em `cap.read`**: se o celular cai da rede, a thread pode travar. Aceito como custo do MVP — recuperação manual (reiniciar processo) é suficiente.
 
 **Pendências / TBD:**
 - Substituir `std::cerr` pelo módulo de logging quando ele existir.
-- Reavaliar `Relay` vs `Buzzer` se surgir terceira saída GPIO (extrair helper `GpioLine` privado ao módulo).
+- Migrar pra hardware PWM (`pigpio` ou `/sys/class/pwm`) se o jitter do software PWM virar um problema visível na catraca.
 - Investigar `CAP_PROP_READ_TIMEOUT_MSEC` se a queda de rede virar dor operacional.
 
 ---
@@ -448,7 +457,7 @@ class MqttPublisher {
 
 ### `src/pipeline/`
 
-**Propósito:** Orquestrador do sistema. Consome `Camera`, `FaceDetector`, `FaceEmbedder`, `Matcher` para reconhecimento, e `Relay`, `Buzzer`, `Storage`, `MqttPublisher` para atuação e comunicação. Duas threads internas: loop principal (captura → detect → embed → match → decide → atua → publica) e loop auxiliar (heartbeat periódico e drainer da fila offline). Não é dono de nenhum componente — recebe referências do `main`.
+**Propósito:** Orquestrador do sistema. Consome `Camera`, `FaceDetector`, `FaceEmbedder`, `Matcher` para reconhecimento, e `Turnstile`, `Buzzer`, `Storage`, `MqttPublisher` para atuação e comunicação. Duas threads internas: loop principal (captura → detect → embed → match → **decide se deduplica** → atua → publica) e loop auxiliar (heartbeat periódico e drainer da fila offline). Não é dono de nenhum componente — recebe referências do `main`.
 
 **Dependências:** stdlib (`<atomic>`, `<chrono>`, `<condition_variable>`, `<iostream>`, `<mutex>`, `<stdexcept>`, `<string>`, `<thread>`, `<utility>`), e todos os outros módulos internos (`domain`, `hardware`, `vision`, `storage`, `mqtt`).
 
@@ -469,12 +478,14 @@ class Pipeline {
        vision::FaceDetector& detector,
        vision::FaceEmbedder& embedder,
        vision::Matcher& matcher,
-       hardware::Relay& relay,
+       hardware::Turnstile& turnstile,
        hardware::Buzzer& buzzer,
        storage::Storage& storage,
        mqtt::MqttPublisher& publisher,
        std::string device_id,
-       int heartbeat_interval_seconds
+       int heartbeat_interval_seconds,
+       int idle_reset_seconds,
+       int unknown_throttle_seconds
    );
 
    void request_stop();
@@ -486,15 +497,36 @@ Não-copiável e não-móvel.
 
 **Fluxo do loop principal:**
 ```
-frame ← camera.capture()         → se vazio, sleep 10ms, retry
-detection ← detector.detect_best(frame)  → se vazio, sleep 10ms, retry
+frame ← camera.capture()                      → se vazio, sleep 10ms, retry
+detection ← detector.detect_best(frame)       → se vazio, sleep 10ms, retry
 embedding ← embedder.extract(frame, detection)
    └─ se falha → publica DeviceFault(InferenceFailure), retry
 match ← matcher.find_match(embedding)
-   ├─ se MATCH → AccessEvent(Granted), relay.grant_access()
-   └─ se vazio → AccessEvent(Unknown), buzzer.beep_denied()
+deduplicação (estado por iteração — ver abaixo)
+   ├─ se deve emitir e MATCH → AccessEvent(Granted), turnstile.grant_access()
+   ├─ se deve emitir e Unknown → AccessEvent(Unknown), buzzer.beep_denied()
+   └─ caso contrário → segue silenciosamente
 publica evento (com fallback no storage se desconectado)
 ```
+
+**Deduplicação de notificações:**
+
+A câmera roda a 30 fps; sem deduplicação, uma pessoa parada na frente da câmera geraria ~180 eventos/minuto. O loop principal mantém estado entre iterações para colapsar isso em eventos significativos:
+
+- `last_status` (`Granted` / `Unknown` / vazio) — última decisão publicada.
+- `last_employee` — id do funcionário do último `Granted` publicado.
+- `last_face_seen_at` — `steady_clock::time_point` do último frame com detecção.
+- `last_unknown_emitted_at` — `steady_clock::time_point` do último `Unknown` publicado.
+
+Regras (avaliadas a cada frame com detecção):
+
+1. **Reset por inatividade**: se `now - last_face_seen_at > idle_reset_seconds` (default 3s), o estado de deduplicação é limpo. A próxima detecção emite evento, mesmo se for a mesma pessoa que passou antes.
+2. **Granted**: emite se for a primeira detecção desde o último reset, **OU** se o `employee_id` mudou, **OU** se a última emissão foi `Unknown`. Mesmo funcionário continuando à frente da câmera → silencioso.
+3. **Unknown**: emite na primeira detecção / transição a partir de `Granted`, e depois em throttle de `unknown_throttle_seconds` (default 10s). Enquanto um rosto não-reconhecido continua à frente da câmera, emite no máximo um evento a cada N segundos.
+
+Resultado prático: uma pessoa que se aproxima, é reconhecida, e fica parada = 1 evento (`Granted`). Uma pessoa não reconhecida que insiste por 30 segundos = 4 eventos (`Unknown` no t=0, t=10, t=20, t=30). Duas pessoas se revezando = 1 evento por troca.
+
+Os parâmetros vêm do `[recognition]` do `config.toml` via `RecognitionConfig`.
 
 **Fluxo do loop auxiliar (a cada ~1s):**
 ```
@@ -523,18 +555,19 @@ se (publisher.is_connected):
 - **`Denied` mantido no enum de `AccessStatus` mas não emitido** no MVP. Infraestrutura pronta para quando regras de acesso (turnos, bloqueios administrativos) forem implementadas.
 - **Helper `try_publish_or_enqueue`** encapsula o padrão "publica ou enfileira no storage" para evitar duplicação nos três pontos onde a gente publica (AccessEvent, Heartbeat, DeviceFault).
 - **Distância não reportada em eventos `Unknown`** — o `Matcher::find_match` retorna `nullopt` sem expor a melhor distância encontrada. Trade-off: simplicidade da API vs capacidade de ajustar threshold via analytics. Pendente para v2.
-- **Sem deduplicação temporal** — pessoa parada na frente da câmera gera 7-10 eventos/segundo. Backend pode agrupar se quiser. Simplicidade pipeline > perfeição.
-- **`relay.grant_access()` e `buzzer.beep_denied()` bloqueiam o loop principal** por 1.5s e 300ms respectivamente. Aceitável no MVP — após ação, pausa é esperada. Pipeline v2 poderia despachar atuação em thread separada.
-- **`steady_clock` para medir intervalos de heartbeat**, `system_clock` para timestamps dos eventos. Separação consciente: steady é monotônico (não anda pra trás), system representa tempo real.
+- **Deduplicação no edge, não no backend.** Razão: o backend processa eventos vindo de vários dispositivos e gravar 180 eventos/minuto por pessoa parada infla o banco e os dashboards. Filtrar próximo da fonte reduz tráfego de rede também. Backend recebe apenas transições significativas.
+- **Estado de deduplicação só no `main_loop`, não em campo da classe.** Vive como variáveis locais da função porque é estado privado dessa thread; ninguém de fora precisa observar/modificar. Reduz superfície de concorrência.
+- **`turnstile.grant_access()` é não-bloqueante**, então o loop principal continua reconhecendo durante os 5s de janela aberta. `buzzer.beep_denied()` ainda bloqueia por `buzzer_beep_ms` (300ms default) — aceitável porque eventos `Unknown` são raros após deduplicação.
+- **`steady_clock` para medir intervalos** (heartbeat, deduplicação), `system_clock` para timestamps dos eventos. Separação consciente: steady é monotônico (não anda pra trás), system representa tempo real.
 - **Sleeps de 10ms** nas saídas precoces do loop principal (sem frame, sem rosto) para evitar busy-waiting.
 
 **Pendências / TBD:**
 - **Retorno da menor distância** do `Matcher::find_match` mesmo em `Unknown` — útil para ajustar threshold com dados reais.
-- **Deduplicação temporal** de eventos para a mesma pessoa.
-- **Thread separada de atuação** — `grant_access`/`beep_denied` não bloqueariam o hot path.
+- **Thread separada para `buzzer.beep_denied()`** se a duração do beep ficar significativa — hoje 300ms é tolerável.
 - **Publicação de `Denied`** quando regras de acesso forem implementadas (turnos, bloqueios).
 - **Substituir `std::cerr`** pelo módulo de logging quando existir.
 - **Métricas do pipeline** (fps real, latência de inferência por etapa) como contadores acessíveis externamente (prometheus, etc).
+- **Ajuste fino dos defaults de deduplicação** (`idle_reset_seconds=3`, `unknown_throttle_seconds=10`) com base no uso real. Os valores são chutes informados; logs do backend devem dizer se ficaram bons.
 
 ---
 
@@ -583,7 +616,7 @@ Note que `enroll` **não linka** `mqtt` nem `pipeline` — não precisa. Facilit
 2. `ensure_parent_directory(sqlite_path)` — cria diretório se não existir.
 3. `Storage(sqlite_path, migrations_path)` — abre banco, aplica schema.
 4. `Camera(source, w, h, fps)` — abre stream (IP Webcam ou `/dev/video0`).
-5. `Relay(chip, pin, pulse_ms, enabled)` / `Buzzer(...)` — GPIO (ou mock se desabilitado).
+5. `Turnstile(chip, servo_pin, servo_open_ms, enabled)` / `Buzzer(chip, buzzer_pin, buzzer_beep_ms, enabled)` — GPIO (ou mock se desabilitado).
 6. `FaceDetector(model_path, threads)` / `FaceEmbedder(...)` — carrega ONNX.
 7. `storage.load_all_embeddings()` → `Matcher(embeddings, threshold)`.
 8. `MqttPublisher(client_id, host, port, keepalive)` — conecta async.
@@ -619,60 +652,105 @@ Mínimo async-signal-safe. Só seta o flag atomic `g_stop_requested`. Nada de al
 
 ---
 
-#### `apps/facegate/`
+## Hardware setup — servo SG90 na Raspberry Pi 4
 
-**Propósito:** Daemon principal. Parseia args, carrega config, constrói todos os componentes na ordem correta, monta o pipeline, instala signal handler, bloqueia esperando SIGINT/SIGTERM, sai por RAII.
+Esta seção documenta como o servo motor da catraca é fisicamente conectado à Raspberry Pi 4 Model B e como o software acima o aciona. Quem mexer no GPIO precisa ler antes — fiação errada queima o servo, a Pi, ou ambos.
 
-**Uso:**
+### Pinagem física
+
+A Pi 4 expõe um conector de 40 pinos. Usamos:
+
+| Função | GPIO (BCM) | Pino físico | Cor de fio típica do SG90 |
+|---|---|---|---|
+| Sinal PWM do servo | GPIO 17 | pino 11 | laranja / amarelo |
+| GND comum | — | pino 6 (ou qualquer GND) | marrom / preto |
+| Buzzer (sinal) | GPIO 27 | pino 13 | — |
+
+O número BCM (17) é o que entra em `config.toml` como `gpio.servo_pin`. O pino físico (11) é o que você conta com o dedo no conector. Não confundir — a numeração não casa.
+
+> Referência completa do pinout: https://pinout.xyz/ — ou `pinout` no terminal da Pi.
+
+### Alimentação do servo
+
+**Não alimentar o SG90 pelo pino 5V da Pi.** Em movimento, o SG90 puxa picos de ~500-700 mA. A Pi consegue fornecer isso da regulagem interna, mas a queda transiente de tensão geralmente trava ou reseta a placa.
+
+Esquema correto:
 
 ```
-./facegate --config <path/to/config.toml>
+                    ┌─────────────────────┐
+                    │   Fonte 5V externa  │ (mín. 1A; recomendado 2A)
+                    │  (carregador USB,   │
+                    │   bateria, fonte    │
+                    │   bancada, etc.)    │
+                    └────┬────────────┬───┘
+                         │ +5V        │ GND
+                         │            │
+                  ┌──────┴────┐       │
+   vermelho do  ──┤  SG90     │       │
+   servo (VCC)    │           │       │
+                  │           │       │
+   marrom do    ──┤  GND      ├───────┤────────┐
+   servo (GND)    │           │       │        │
+                  │           │       │        │
+   laranja do   ──┤  sinal    │       │        │
+   servo (PWM)    └───────────┘       │        │
+                         │            │        │
+                         │            │        │
+                         │      ┌─────┴───┐    │
+                         │      │  Pi 4   │    │
+                         │      │         │    │
+                         │      │ GPIO 17 │←───┘
+                         │      │ (pino   │
+                         │      │  11)    │
+                         │      │         │
+                         │      │ GND     ├──── liga ao GND comum
+                         │      │ (pino 6)│     da fonte externa
+                         │      └─────────┘
 ```
 
-**Códigos de saída:**
-- `0` — shutdown limpo via SIGINT/SIGTERM.
-- `1` — erro fatal no boot (config inválido, modelo não encontrado, broker inalcançável, etc).
-- `2` — args inválidos (mostra usage e sai).
+Pontos críticos:
 
-**Ordem de construção** (no `try`):
-1. `load_config(path)` — parse + validação.
-2. `ensure_parent_directory(sqlite_path)` — cria diretório se não existir.
-3. `Storage(sqlite_path, migrations_path)` — abre banco, aplica schema.
-4. `Camera(source, w, h, fps)` — abre stream (IP Webcam ou `/dev/video0`).
-5. `Relay(chip, pin, pulse_ms, enabled)` / `Buzzer(...)` — GPIO (ou mock se desabilitado).
-6. `FaceDetector(model_path, threads)` / `FaceEmbedder(...)` — carrega ONNX.
-7. `storage.load_all_embeddings()` → `Matcher(embeddings, threshold)`.
-8. `MqttPublisher(client_id, host, port, keepalive)` — conecta async.
-9. `install_signal_handlers()` — intercepta SIGINT, SIGTERM.
-10. `Pipeline(...)` — começa a rodar.
+1. **GND comum obrigatório.** O GND da fonte externa **precisa** estar conectado a um GND da Pi (pino 6, 9, 14, 20, 25, 30, 34 ou 39). Sem essa referência comum, o servo "não enxerga" o sinal PWM da Pi e fica tremendo aleatoriamente.
+2. **Nunca conectar o +5V externo ao pino 5V da Pi.** Backfeed pode queimar a placa.
+3. **Sinal vai direto da GPIO 17 para o fio laranja do servo.** Nada de level shifter — o SG90 aceita lógica de 3.3V sem resistor de série (a maioria das versões).
+4. **Capacitor de bypass** (eletrolítico 470µF–1000µF entre +5V e GND do servo, próximo ao motor) é opcional mas reduz ruído elétrico que pode resetar a Pi em movimentos bruscos.
 
-**Loop do main:**
-```cpp
-while (!g_stop_requested.load()) {
-   std::this_thread::sleep_for(100ms);
-}
-pipeline.request_stop();
-// destruição por RAII limpa o resto
-```
+### Sinal PWM gerado pelo software
 
-**Signal handler:**
+O `Turnstile` (em `src/hardware/turnstile.cpp`) gera o PWM via software usando `libgpiod` v2:
 
-Mínimo async-signal-safe. Só seta o flag atomic `g_stop_requested`. Nada de alocação ou I/O.
+- **Frequência:** 50 Hz (período de 20.000 µs). Padrão da indústria pra servos hobby.
+- **Largura do pulso (aberto):** 2000 µs → posição ~90° (configurável via construtor, parâmetro `open_pulse_us`).
+- **Largura do pulso (fechado):** linha em LOW contínuo — servo de-energizado, posição mantida mecanicamente.
+- **Duração da janela aberta:** `gpio.servo_open_ms` (default 5000 ms).
 
-**Decisões de projeto:**
-- **Parsing manual de args** (não `getopt`, nem lib externa). Único parâmetro obrigatório (`--config`). Lib seria overengineering.
-- **Polling de 100ms no `main`** em vez de `pipeline.wait()` com CV. Razão: integração com signal handler é mais simples via atomic global do que via self-pipe trick. Overhead de 100ms no shutdown é imperceptível.
-- **Ordem de destruição garantida por RAII** e ordem dos membros. Pipeline sai primeiro (join threads), depois publisher, matcher, detector/embedder, hardware, storage. Sem orquestração manual.
-- **`kGpioChipPath = "/dev/gpiochip0"` hardcoded**. Padrão da Raspberry Pi 4. Se virar necessário configurar, vai pro config.toml.
-- **`ensure_parent_directory` cria diretório do SQLite automaticamente** via `std::filesystem::create_directories`. Reduz fricção de boot (não precisa operador criar `/var/lib/facegate/` manualmente).
-- **Logs de boot verbosos** em `std::cerr` (`facegate: loading config...`, etc). Útil pra diagnosticar falhas no boot. Substitui quando tiver módulo de logging.
-- **`const` no `cfg`** documenta intenção (config imutável após load) e permite otimizações.
+O loop fica `wait`-ado num `condition_variable` enquanto fechado (não consome CPU, não envia pulso). Em `grant_access()`, acorda, emite ~250 pulsos durante os 5s (50 Hz × 5s), e volta a dormir com a linha em LOW.
 
-**Pendências / TBD:**
-- **Path do `migrations/schema.sql`** hardcoded relativo ao CWD. Assume execução de `edge/`. Alternativa: adicionar `migrations_path` no config, ou resolver relativo ao binário. Escolhido hardcode pro MVP — menos dependência, mais fricção operacional.
-- **Handler para SIGHUP** (tradicional sinal de "reload config"). Hoje é tratado como SIGTERM (sai). Se config muito dinâmica virar necessário, implementa reload sem restart.
-- **Pid file** (`/var/run/facegate.pid`) para integração com systemd. Não necessário se o binário rodar sob supervisão de unidade systemd direto.
+### Calibração da posição angular
 
----
+Se o SG90 não chegar exatamente nos ângulos certos (fabricantes variam), ajustar `open_pulse_us` no construtor. Range útil seguro do SG90:
 
-## Pendências / TBD
+| Largura do pulso | Ângulo aproximado |
+|---|---|
+| 500 µs | 0° (extremo) |
+| 1000 µs | ~45° |
+| 1500 µs | 90° (centro) |
+| 2000 µs | ~135° (default `open`) |
+| 2500 µs | 180° (extremo) |
+
+Não passar dos extremos — o servo trava mecanicamente e o motor pode queimar tentando forçar.
+
+### Modo mock (sem hardware)
+
+Em desenvolvimento sem Raspberry, definir `gpio.enabled = false` no `config.toml`. O construtor do `Turnstile` retorna cedo sem abrir o chip GPIO, e `grant_access()` apenas loga `Turnstile: grant_access (mock)` no `std::cerr`. Mesma coisa pro `Buzzer`. Permite rodar o `facegate` em laptop com IP Webcam pra debug.
+
+### Diagnóstico rápido
+
+| Sintoma | Causa provável |
+|---|---|
+| Servo treme constantemente | GND não comum entre fonte externa e Pi |
+| Pi reseta quando o servo move | Servo alimentado pelo 5V da Pi — usar fonte externa |
+| Servo não responde a `grant_access` | `gpio.enabled = false` no config, ou pino BCM errado |
+| Servo move mas não chega aos 90° | Ajustar `open_pulse_us` (provável que o motor precise de 1800-2200 µs) |
+| Servo gira pro lado errado | Trocar `open_pulse_us` para um valor menor que o de fechado (~500-1000 µs) |
+| `facegate: failed to request GPIO line` no boot | Outro processo segurando a linha (verificar `gpioinfo`), ou rodar com `sudo` (ou adicionar usuário ao grupo `gpio`) |

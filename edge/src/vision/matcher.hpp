@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 #include "../domain/domain.hpp"
@@ -22,11 +24,19 @@ public:
 
     std::size_t cache_size() const noexcept;
 
-     std::optional<float> best_distance(const facegate::domain::EmbeddingVector& query) const;
+    std::optional<float> best_distance(
+        const facegate::domain::EmbeddingVector& query
+    ) const;
+
+    // Mutation entry points used by the MQTT sync subscriber. Safe to
+    // call concurrently with find_match / best_distance.
+    void upsert(const facegate::domain::Embedding& embedding);
+    void remove(std::int64_t embedding_id);
 
 private:
     std::vector<facegate::domain::Embedding> cache_;
     float threshold_;
+    mutable std::mutex mutex_;
 };
 
 }  // namespace facegate::vision

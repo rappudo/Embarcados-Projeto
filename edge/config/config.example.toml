@@ -37,18 +37,39 @@ height = 480
 fps = 30
 
 # -----------------------------------------------------------------------------
-# GPIO — atuadores físicos
+# GPIO — atuadores físicos (servo SG90 da catraca + buzzer)
 # -----------------------------------------------------------------------------
 [gpio]
 # Numeração BCM (Broadcom). Ver pinout.xyz para a placa.
-relay_pin = 17
+# servo_pin: GPIO do servo SG90 que abre a catraca (PWM por software a 50 Hz).
+servo_pin = 17
 buzzer_pin = 27
 
-# Duração do pulso que aciona o relé da catraca, em milissegundos.
-relay_pulse_ms = 1500
+# Quanto tempo a catraca permanece aberta após um acesso concedido, em ms.
+# Re-acionamentos durante esta janela estendem o tempo aberto — nunca reiniciam
+# o ciclo abre/fecha, o que seria destrutivo para o servo em 30 fps.
+servo_open_ms = 5000
 
 # Duração do beep do buzzer em acesso negado/desconhecido, em milissegundos.
 buzzer_beep_ms = 300
+
+# -----------------------------------------------------------------------------
+# Reconhecimento — deduplicação de notificações
+# -----------------------------------------------------------------------------
+[recognition]
+# A 30 fps o reconhecimento dispara 30x/segundo. Sem deduplicação, uma pessoa
+# parada na frente da câmera gera 180 eventos/minuto. As duas configs abaixo
+# colapsam isso em eventos significativos.
+
+# Após este tempo sem detectar nenhum rosto, o estado é resetado — a próxima
+# pessoa (mesmo se for a mesma) gera evento novo. Curto o suficiente para que
+# "alguém saiu e voltou" seja registrado como nova entrada.
+idle_reset_seconds = 3
+
+# Throttle para eventos "Unknown": enquanto um rosto não reconhecido continuar
+# à frente da câmera, publicamos no máximo um evento a cada N segundos. A
+# primeira aparição é sempre emitida imediatamente.
+unknown_throttle_seconds = 10
 
 # -----------------------------------------------------------------------------
 # Armazenamento local

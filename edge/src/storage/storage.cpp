@@ -64,14 +64,15 @@ std::vector<facegate::domain::Embedding> Storage::load_all_embeddings() {
 
     try {
         SQLite::Statement query(impl_->db,
-            "SELECT employee_id, vector FROM embeddings ORDER BY id ASC");
+            "SELECT id, employee_id, vector FROM embeddings ORDER BY id ASC");
 
         while (query.executeStep()) {
             facegate::domain::Embedding emb{};
-            emb.owner = query.getColumn(0).getInt64();
+            emb.id = query.getColumn(0).getInt64();
+            emb.owner = query.getColumn(1).getInt64();
 
-            const void* blob = query.getColumn(1).getBlob();
-            const int blob_size = query.getColumn(1).getBytes();
+            const void* blob = query.getColumn(2).getBlob();
+            const int blob_size = query.getColumn(2).getBytes();
 
             constexpr int expected_bytes =
                 static_cast<int>(facegate::domain::EMBEDDING_DIM * sizeof(float));
@@ -118,6 +119,53 @@ void Storage::insert_embedding(const facegate::domain::Embedding& embedding) {
     } catch (const SQLite::Exception& e) {
         throw std::runtime_error(
             std::string("Storage: insert_embedding failed: ") + e.what()
+        );
+    }
+}
+
+void Storage::upsert_embedding(const facegate::domain::Embedding& embedding) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (embedding.id == 0) {
+        throw std::runtime_error(
+            "Storage: upsert_embedding requires a non-zero id (backend embedding_id)"
+        );
+    }
+
+    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
+
+    constexpr int blob_bytes =
+        static_cast<int>(facegate::domain::EMBEDDING_DIM * sizeof(float));
+
+    try {
+        SQLite::Statement stmt(impl_->db,
+            "INSERT OR REPLACE INTO embeddings (id, employee_id, vector, created_at) "
+            "VALUES (?, ?, ?, ?)");
+        stmt.bind(1, static_cast<std::int64_t>(embedding.id));
+        stmt.bind(2, static_cast<std::int64_t>(embedding.owner));
+        stmt.bind(3, embedding.vector.data(), blob_bytes);
+        stmt.bind(4, static_cast<std::int64_t>(now_ms));
+        stmt.exec();
+    } catch (const SQLite::Exception& e) {
+        throw std::runtime_error(
+            std::string("Storage: upsert_embedding failed: ") + e.what()
+        );
+    }
+}
+
+void Storage::delete_embedding(std::int64_t embedding_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    try {
+        SQLite::Statement stmt(impl_->db,
+            "DELETE FROM embeddings WHERE id = ?");
+        stmt.bind(1, embedding_id);
+        stmt.exec();
+    } catch (const SQLite::Exception& e) {
+        throw std::runtime_error(
+            std::string("Storage: delete_embedding failed: ") + e.what()
         );
     }
 }
