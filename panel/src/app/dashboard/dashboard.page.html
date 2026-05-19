@@ -27,6 +27,15 @@
         <button
           type="button"
           class="dashboard-nav-item"
+          [class.active]="activeTab === 'cadastro'"
+          (click)="setTab('cadastro')"
+        >
+          <ion-icon name="person-add-outline" class="dashboard-nav-icon"></ion-icon>
+          <span>Cadastro</span>
+        </button>
+        <button
+          type="button"
+          class="dashboard-nav-item"
           [class.active]="activeTab === 'eventos'"
           (click)="setTab('eventos')"
         >
@@ -218,6 +227,60 @@
         <div *ngIf="!selectedFuncionario" class="dashboard-select-message">
           Selecione um funcionário para vizualisar a análise
         </div>
+      </section>
+
+      <section *ngIf="activeTab === 'cadastro'" class="dashboard-view">
+        <header class="dashboard-page-header">
+          <h2 class="dashboard-title">Cadastro de Funcionários</h2>
+          <p class="dashboard-subtitle">
+            Adicione um novo funcionário ao sistema.
+          </p>
+        </header>
+
+        <ion-card class="cadastro-card">
+          <ion-card-content>
+            <ion-item lines="full" class="cadastro-field">
+              <ion-label position="stacked">Nome <ion-text color="danger">*</ion-text></ion-label>
+              <ion-input
+                type="text"
+                placeholder="Nome completo"
+                [(ngModel)]="cadastroNome"
+                [disabled]="cadastroLoading"
+              ></ion-input>
+            </ion-item>
+
+            <ion-item lines="full" class="cadastro-field">
+              <ion-label position="stacked">Turno</ion-label>
+              <ion-select
+                interface="popover"
+                placeholder="Selecionar turno (opcional)"
+                [(ngModel)]="cadastroTurno"
+                [disabled]="cadastroLoading"
+              >
+                <ion-select-option [value]="null">Sem turno</ion-select-option>
+                <ion-select-option value="Manhã">Manhã</ion-select-option>
+                <ion-select-option value="Tarde">Tarde</ion-select-option>
+                <ion-select-option value="Noite">Noite</ion-select-option>
+              </ion-select>
+            </ion-item>
+
+            <p *ngIf="cadastroError" class="cadastro-message cadastro-error">
+              {{ cadastroError }}
+            </p>
+            <p *ngIf="cadastroSuccess" class="cadastro-message cadastro-success">
+              {{ cadastroSuccess }}
+            </p>
+
+            <ion-button
+              expand="block"
+              class="cadastro-submit"
+              (click)="submitCadastro()"
+              [disabled]="cadastroLoading || !cadastroNome.trim()"
+            >
+              {{ cadastroLoading ? 'Cadastrando...' : 'Cadastrar' }}
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
       </section>
 
       <section *ngIf="activeTab === 'eventos'" class="dashboard-view">

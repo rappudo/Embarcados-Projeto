@@ -7,9 +7,12 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
+  IonInput,
+  IonItem,
   IonSearchbar,
   IonSelect,
   IonSelectOption,
+  IonText,
   IonToolbar,
   IonCard,
   IonCardHeader,
@@ -17,6 +20,7 @@ import {
   IonCardContent,
   IonLabel,
 } from '@ionic/angular/standalone';
+import { HttpErrorResponse } from '@angular/common/http';
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
 import { EventCardComponent } from '../event-card/event-card.component';
 import { EmployeesService, Funcionario } from '../employees/employees.service';
@@ -57,7 +61,7 @@ interface AcessoDiaSemanaItem {
   count: number;
 }
 
-type DashboardTab = 'dashboard' | 'funcionarios' | 'eventos';
+type DashboardTab = 'dashboard' | 'funcionarios' | 'cadastro' | 'eventos';
 
 const TOLERANCIA_ATRASO_MIN = 15;
 
@@ -83,9 +87,12 @@ const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     IonContent,
     IonHeader,
     IonIcon,
+    IonInput,
+    IonItem,
     IonSearchbar,
     IonSelect,
     IonSelectOption,
+    IonText,
     IonToolbar,
     IonCard,
     IonCardHeader,
@@ -128,14 +135,15 @@ export class DashboardPage implements OnInit {
 
   eventos: Evento[] = [];
 
+  // Form de cadastro de funcionário
+  cadastroNome = '';
+  cadastroTurno: string | null = null;
+  cadastroLoading = false;
+  cadastroError = '';
+  cadastroSuccess = '';
+
   ngOnInit(): void {
-    this.employees.list().subscribe((rows) => {
-      this.funcionarios = rows;
-      this.totalFuncionarios = rows.length;
-      this.turnos = [...new Set(rows.map((f) => f.turno).filter((t) => !!t))].sort();
-      this.distribuicaoTurno = this.computeDistribuicaoTurno();
-      this.pieSegments = this.computePieSegments(this.distribuicaoTurno);
-    });
+    this.reloadFuncionarios();
 
     this.analytics.summaryToday().subscribe((s) => {
       this.pontualidadePct =
@@ -185,6 +193,50 @@ export class DashboardPage implements OnInit {
 
   setTab(tab: DashboardTab): void {
     this.activeTab = tab;
+  }
+
+  // ---------- Cadastro ----------
+
+  private reloadFuncionarios(): void {
+    this.employees.list().subscribe((rows) => {
+      this.funcionarios = rows;
+      this.totalFuncionarios = rows.length;
+      this.turnos = [...new Set(rows.map((f) => f.turno).filter((t) => !!t))].sort();
+      this.distribuicaoTurno = this.computeDistribuicaoTurno();
+      this.pieSegments = this.computePieSegments(this.distribuicaoTurno);
+    });
+  }
+
+  submitCadastro(): void {
+    if (this.cadastroLoading) return;
+    const nome = this.cadastroNome.trim();
+    this.cadastroError = '';
+    this.cadastroSuccess = '';
+    if (!nome) {
+      this.cadastroError = 'Informe o nome do funcionário.';
+      return;
+    }
+
+    this.cadastroLoading = true;
+    this.employees.create({ nome, turno: this.cadastroTurno }).subscribe({
+      next: (f) => {
+        this.cadastroLoading = false;
+        this.cadastroSuccess = `Funcionário "${f.nome}" cadastrado com sucesso.`;
+        this.cadastroNome = '';
+        this.cadastroTurno = null;
+        this.reloadFuncionarios();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.cadastroLoading = false;
+        if (err.status === 400) {
+          this.cadastroError = 'Dados inválidos. Verifique o nome informado.';
+        } else if (err.status === 0) {
+          this.cadastroError = 'Não foi possível conectar ao servidor.';
+        } else {
+          this.cadastroError = 'Erro ao cadastrar funcionário. Tente novamente.';
+        }
+      },
+    });
   }
 
   // ---------- Computações de distribuição por turno ----------

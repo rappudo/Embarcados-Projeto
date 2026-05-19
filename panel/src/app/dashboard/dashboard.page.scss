@@ -559,3 +559,40 @@ ion-card.chart-card {
     align-self: center;
   }
 }
+
+/* Cadastro */
+
+ion-card.cadastro-card {
+  margin: 0;
+  max-width: 560px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.cadastro-field {
+  --background: transparent;
+  --padding-start: 0;
+  --inner-padding-end: 0;
+  margin-bottom: 8px;
+}
+
+.cadastro-message {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cadastro-error {
+  color: #b91c1c;
+}
+
+.cadastro-success {
+  color: #15803d;
+}
+
+.cadastro-submit {
+  margin-top: 18px;
+  --border-radius: 10px;
+}
