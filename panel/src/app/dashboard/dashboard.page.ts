@@ -19,6 +19,8 @@ import {
 } from '@ionic/angular/standalone';
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
 import { EventCardComponent } from '../event-card/event-card.component';
+import { EmployeesService, Funcionario } from '../employees/employees.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 interface Evento {
   titulo: string;
@@ -27,33 +29,13 @@ interface Evento {
   icone?: string;
 }
 
-interface Registro {
-  data: string;
-  entrada: string;
-  saidas: string[];
-}
-
-interface Funcionario {
-  id: number;
-  nome: string;
-  idade: number;
-  dataIngresso: string;
-  turno: string;
-  registros: Registro[];
-}
-
-interface HorariosPontoMock {
-  funcionarios: Funcionario[];
-}
-
 interface EventosMock {
   eventos: Evento[];
 }
 
-interface HorasPorDiaItem {
-  data: string;
+interface AcessoHoraItem {
   label: string;
-  horas: number;
+  count: number;
 }
 
 interface DistribuicaoTurnoItem {
@@ -70,20 +52,14 @@ interface PieSegment {
   d: string;
 }
 
-interface AtrasoDiaSemanaItem {
+interface AcessoDiaSemanaItem {
   dia: string;
   count: number;
 }
 
 type DashboardTab = 'dashboard' | 'funcionarios' | 'eventos';
 
-const HORARIOS_TURNO: Record<string, number> = {
-  'Manhã': 8 * 60,
-  'Tarde': 13 * 60,
-  'Noite': 22 * 60,
-};
-
-const TOLERANCIA_ATRASO_MIN = 15; // minutos de tolerância para considerar um registro como atraso
+const TOLERANCIA_ATRASO_MIN = 15;
 
 const TURNO_CORES: Record<string, string> = {
   'Manhã': '#fbbf24',
@@ -122,6 +98,8 @@ const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 })
 export class DashboardPage implements OnInit {
   private http = inject(HttpClient);
+  private employees = inject(EmployeesService);
+  private analytics = inject(AnalyticsService);
 
   activeTab: DashboardTab = 'dashboard';
 
@@ -133,35 +111,70 @@ export class DashboardPage implements OnInit {
   turnos: string[] = [];
   funcionariosFiltrados: Funcionario[] = [];
 
-  // Filtros do dashboard
-  periodoDias: 30 | 60 | 90 = 30;
-  turnoChartFiltro: string | null = null;
-
   // KPIs / dados derivados
   totalFuncionarios = 0;
   totalAtrasos = 0;
   pontualidadePct = 0;
-  mediaHorasDiarias = 0;
+  atrasoMedioMin = 0;
 
-  horasPorDia: HorasPorDiaItem[] = [];
-  maxHorasDia = 0;
+  acessosPorHora: AcessoHoraItem[] = [];
+  maxAcessosHora = 0;
 
   distribuicaoTurno: DistribuicaoTurnoItem[] = [];
   pieSegments: PieSegment[] = [];
 
-  atrasosPorDiaSemana: AtrasoDiaSemanaItem[] = [];
-  maxAtrasoDiaSemana = 0;
+  acessosPorDiaSemana: AcessoDiaSemanaItem[] = [];
+  maxAcessoDiaSemana = 0;
 
   eventos: Evento[] = [];
 
   ngOnInit(): void {
-    this.http
-      .get<HorariosPontoMock>('assets/mock_data_jsons/horarios_ponto.json')
-      .subscribe((data) => {
-        this.funcionarios = data.funcionarios;
-        this.turnos = [...new Set(data.funcionarios.map((f) => f.turno))].sort();
-        this.recomputeAnalytics();
-      });
+    this.employees.list().subscribe((rows) => {
+      this.funcionarios = rows;
+      this.totalFuncionarios = rows.length;
+      this.turnos = [...new Set(rows.map((f) => f.turno).filter((t) => !!t))].sort();
+      this.distribuicaoTurno = this.computeDistribuicaoTurno();
+      this.pieSegments = this.computePieSegments(this.distribuicaoTurno);
+    });
+
+    this.analytics.summaryToday().subscribe((s) => {
+      this.pontualidadePct =
+        s.total > 0 ? Math.round((s.granted / s.total) * 100) : 0;
+    });
+
+    this.analytics.avgDelay().subscribe((rows) => {
+      this.totalAtrasos = rows.filter(
+        (r) => r.avg_delay_minutes > TOLERANCIA_ATRASO_MIN,
+      ).length;
+      this.atrasoMedioMin =
+        rows.length > 0
+          ? Math.round(
+              (rows.reduce((acc, r) => acc + r.avg_delay_minutes, 0) /
+                rows.length) *
+                10,
+            ) / 10
+          : 0;
+    });
+
+    this.analytics.accessByHour().subscribe((rows) => {
+      this.acessosPorHora = rows.map((r) => ({
+        label: `${r.hour.toString().padStart(2, '0')}h`,
+        count: r.count,
+      }));
+      this.maxAcessosHora = Math.max(1, ...rows.map((r) => r.count));
+    });
+
+    this.analytics.presenceHeatmap().subscribe((rows) => {
+      const byDay = [0, 0, 0, 0, 0, 0, 0];
+      for (const r of rows) {
+        if (r.day >= 0 && r.day < 7) byDay[r.day] += r.count;
+      }
+      this.acessosPorDiaSemana = DIAS_SEMANA.map((dia, i) => ({
+        dia,
+        count: byDay[i],
+      }));
+      this.maxAcessoDiaSemana = Math.max(1, ...byDay);
+    });
 
     this.http
       .get<EventosMock>('assets/mock_data_jsons/eventos.json')
@@ -174,85 +187,13 @@ export class DashboardPage implements OnInit {
     this.activeTab = tab;
   }
 
-  onPeriodoChange(): void {
-    this.recomputeAnalytics();
-  }
-
-  onTurnoChartChange(): void {
-    this.recomputeHorasPorDia();
-  }
-
-  // ---------- Computações ----------
-
-  private recomputeAnalytics(): void {
-    const cutoff = this.cutoffDate();
-
-    let totalAtrasos = 0;
-    let totalRegistros = 0;
-    let totalMinutosTrabalhados = 0;
-    const atrasosDiaSemana = [0, 0, 0, 0, 0, 0, 0];
-
-    for (const f of this.funcionarios) {
-      for (const r of f.registros) {
-        const d = this.parseDate(r.data);
-        if (d < cutoff) continue;
-        totalRegistros++;
-        totalMinutosTrabalhados += this.computeWorkedMin(r);
-        if (this.isAtraso(r, f.turno)) {
-          totalAtrasos++;
-          atrasosDiaSemana[d.getDay()]++;
-        }
-      }
-    }
-
-    this.totalFuncionarios = this.funcionarios.length;
-    this.totalAtrasos = totalAtrasos;
-    this.pontualidadePct =
-      totalRegistros > 0
-        ? Math.round(((totalRegistros - totalAtrasos) / totalRegistros) * 100)
-        : 0;
-    this.mediaHorasDiarias =
-      totalRegistros > 0
-        ? Math.round((totalMinutosTrabalhados / totalRegistros / 60) * 10) / 10
-        : 0;
-
-    this.atrasosPorDiaSemana = DIAS_SEMANA.map((dia, i) => ({
-      dia,
-      count: atrasosDiaSemana[i],
-    }));
-    this.maxAtrasoDiaSemana = Math.max(1, ...atrasosDiaSemana);
-
-    this.distribuicaoTurno = this.computeDistribuicaoTurno();
-    this.pieSegments = this.computePieSegments(this.distribuicaoTurno);
-
-    this.recomputeHorasPorDia();
-  }
-
-  private recomputeHorasPorDia(): void {
-    const cutoff = this.cutoffDate();
-    const byDate = new Map<string, number>();
-
-    for (const f of this.funcionarios) {
-      if (this.turnoChartFiltro && f.turno !== this.turnoChartFiltro) continue;
-      for (const r of f.registros) {
-        if (this.parseDate(r.data) < cutoff) continue;
-        byDate.set(r.data, (byDate.get(r.data) ?? 0) + this.computeWorkedMin(r));
-      }
-    }
-
-    const sortedDates = [...byDate.keys()].sort();
-    this.horasPorDia = sortedDates.map((data) => ({
-      data,
-      label: this.formatDateLabel(data),
-      horas: Math.round(((byDate.get(data) ?? 0) / 60) * 10) / 10,
-    }));
-    this.maxHorasDia = Math.max(1, ...this.horasPorDia.map((d) => d.horas));
-  }
+  // ---------- Computações de distribuição por turno ----------
 
   private computeDistribuicaoTurno(): DistribuicaoTurnoItem[] {
     const counts = new Map<string, number>();
     for (const f of this.funcionarios) {
-      counts.set(f.turno, (counts.get(f.turno) ?? 0) + 1);
+      const t = f.turno || 'Sem turno';
+      counts.set(t, (counts.get(t) ?? 0) + 1);
     }
     const total = this.funcionarios.length || 1;
     return [...counts.entries()]
@@ -297,49 +238,7 @@ export class DashboardPage implements OnInit {
     });
   }
 
-  // ---------- Helpers ----------
-
-  private cutoffDate(): Date {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - this.periodoDias);
-    return d;
-  }
-
-  private parseDate(s: string): Date {
-    const [y, m, d] = s.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  }
-
-  private parseTime(s: string): number {
-    const [h, m] = s.split(':').map(Number);
-    return h * 60 + m;
-  }
-
-  private computeWorkedMin(r: Registro): number {
-    const pts = [r.entrada, ...r.saidas].map((t) => this.parseTime(t));
-    for (let i = 1; i < pts.length; i++) {
-      while (pts[i] < pts[i - 1]) pts[i] += 24 * 60;
-    }
-    let worked = 0;
-    for (let i = 0; i + 1 < pts.length; i += 2) {
-      worked += pts[i + 1] - pts[i];
-    }
-    return worked;
-  }
-
-  private isAtraso(r: Registro, turno: string): boolean {
-    const expected = HORARIOS_TURNO[turno];
-    if (expected === undefined) return false;
-    return this.parseTime(r.entrada) > expected + TOLERANCIA_ATRASO_MIN;
-  }
-
-  private formatDateLabel(s: string): string {
-    const [, m, d] = s.split('-');
-    return `${d}/${m}`;
-  }
-
-  // ---------- Aba Funcionários (já existente) ----------
+  // ---------- Aba Funcionários ----------
 
   filtrarFuncionarios(): void {
     const termo = this.searchTerm.trim().toLowerCase();

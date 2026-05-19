@@ -10,7 +10,7 @@ import { CommonModule } from '@angular/common';
 })
 export class EmployeeCardComponent {
   @Input({ required: true }) nome!: string;
-  @Input({ required: true }) idade!: number;
-  @Input({ required: true }) dataIngresso!: string;
+  @Input() idade?: number;
+  @Input() dataIngresso?: string;
   @Input() foto = 'assets/Images/Profile_Placeholder.jpg';
 }

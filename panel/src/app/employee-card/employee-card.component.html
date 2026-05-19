@@ -7,11 +7,11 @@
     <h3 class="employee-card-name">{{ nome }}</h3>
 
     <dl class="employee-card-details">
-      <div class="employee-card-detail">
+      <div class="employee-card-detail" *ngIf="idade != null">
         <dt>Idade</dt>
         <dd>{{ idade }} anos</dd>
       </div>
-      <div class="employee-card-detail">
+      <div class="employee-card-detail" *ngIf="dataIngresso">
         <dt>Data de Ingresso</dt>
         <dd>{{ dataIngresso | date: 'dd/MM/yyyy' }}</dd>
       </div>
