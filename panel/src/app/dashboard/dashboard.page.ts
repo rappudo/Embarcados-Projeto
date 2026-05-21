@@ -337,6 +337,7 @@ export class DashboardPage implements OnInit {
       this.turnos = [...new Set(rows.map((f) => f.turno).filter((t) => !!t))].sort();
       this.distribuicaoTurno = this.computeDistribuicaoTurno();
       this.pieSegments = this.computePieSegments(this.distribuicaoTurno);
+      this.filtrarFuncionarios();
     });
   }
 
@@ -452,12 +453,10 @@ export class DashboardPage implements OnInit {
 
   filtrarFuncionarios(): void {
     const termo = this.searchTerm.trim().toLowerCase();
-    if (!termo) {
-      this.funcionariosFiltrados = [];
-      return;
-    }
+    // Empty search no longer means "hide all" — opening the tab fresh
+    // should reveal everyone, with the turno dropdown narrowing the list.
     this.funcionariosFiltrados = this.funcionarios.filter((f) => {
-      const matchNome = f.nome.toLowerCase().includes(termo);
+      const matchNome = !termo || f.nome.toLowerCase().includes(termo);
       const matchTurno = !this.selectedTurno || f.turno === this.selectedTurno;
       return matchNome && matchTurno;
     });
@@ -477,7 +476,7 @@ export class DashboardPage implements OnInit {
   selecionarFuncionario(f: Funcionario): void {
     this.selectedFuncionario = f;
     this.searchTerm = '';
-    this.funcionariosFiltrados = [];
+    this.filtrarFuncionarios();
   }
 
   // ---------- Aba Exportar ----------

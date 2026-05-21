@@ -244,6 +244,76 @@
   margin-top: 32px;
 }
 
+.dashboard-funcionarios-search {
+  flex: 1;
+}
+
+.dashboard-funcionarios-count {
+  margin: 20px 0 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-funcionarios-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.dashboard-funcionarios-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease,
+    transform 0.12s ease;
+
+  .name {
+    font-size: 15px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  &:hover {
+    background: rgba(111, 217, 111, 0.08);
+    border-color: var(--primary);
+    transform: translateY(-1px);
+  }
+
+  &.active {
+    background: rgba(111, 217, 111, 0.16);
+    border-color: var(--primary);
+    .name {
+      color: var(--primary-strong);
+      font-weight: 600;
+    }
+  }
+}
+
+.turno-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #1f2937;
+  background: #e5e7eb;
+
+  &.turno-manhã  { background: rgba(251, 191, 36, 0.18); color: #b45309; }
+  &.turno-tarde  { background: rgba(96, 165, 250, 0.20); color: #1d4ed8; }
+  &.turno-noite  { background: rgba(99, 102, 241, 0.22); color: #4338ca; }
+}
+
 .dashboard-events {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

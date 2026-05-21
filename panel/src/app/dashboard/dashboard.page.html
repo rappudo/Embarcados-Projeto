@@ -248,27 +248,12 @@
             </ion-select-option>
           </ion-select>
 
-          <div class="dashboard-search-wrapper">
-            <ion-searchbar
-              placeholder="Buscar funcionário..."
-              [(ngModel)]="searchTerm"
-              (ionInput)="filtrarFuncionarios()"
-              class="dashboard-searchbar"
-            ></ion-searchbar>
-
-            <ul
-              *ngIf="funcionariosFiltrados.length > 0"
-              class="dashboard-search-dropdown"
-            >
-              <li
-                *ngFor="let f of funcionariosFiltrados"
-                class="dashboard-search-option"
-                (click)="selecionarFuncionario(f)"
-              >
-                {{ f.nome }}
-              </li>
-            </ul>
-          </div>
+          <ion-searchbar
+            placeholder="Buscar funcionário..."
+            [(ngModel)]="searchTerm"
+            (ionInput)="filtrarFuncionarios()"
+            class="dashboard-searchbar dashboard-funcionarios-search"
+          ></ion-searchbar>
         </div>
 
         <app-employee-card
@@ -278,8 +263,38 @@
           [dataIngresso]="selectedFuncionario.dataIngresso"
         ></app-employee-card>
 
-        <div *ngIf="!selectedFuncionario" class="dashboard-select-message">
-          Selecione um funcionário para vizualisar a análise
+        <p class="dashboard-funcionarios-count" *ngIf="funcionariosFiltrados.length > 0">
+          {{ funcionariosFiltrados.length }} de {{ funcionarios.length }}
+          funcionário{{ funcionarios.length === 1 ? '' : 's' }}
+        </p>
+
+        <ul
+          *ngIf="funcionariosFiltrados.length > 0"
+          class="dashboard-funcionarios-list"
+        >
+          <li
+            *ngFor="let f of funcionariosFiltrados"
+            class="dashboard-funcionarios-item"
+            [class.active]="selectedFuncionario?.id === f.id"
+            (click)="selecionarFuncionario(f)"
+          >
+            <span class="name">{{ f.nome }}</span>
+            <span *ngIf="f.turno" class="turno-badge turno-{{ f.turno.toLowerCase() }}">
+              {{ f.turno }}
+            </span>
+          </li>
+        </ul>
+
+        <div
+          *ngIf="funcionariosFiltrados.length === 0"
+          class="dashboard-select-message"
+        >
+          <ng-container *ngIf="funcionarios.length === 0">
+            Nenhum funcionário cadastrado ainda.
+          </ng-container>
+          <ng-container *ngIf="funcionarios.length > 0">
+            Nenhum funcionário encontrado com esses filtros.
+          </ng-container>
         </div>
       </section>
 

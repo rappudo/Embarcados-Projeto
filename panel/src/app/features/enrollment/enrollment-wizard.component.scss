@@ -1,49 +1,146 @@
-// Layout note: the modal owns the full height; ion-header + ion-footer
-// pin top/bottom and the scrollable area between them is ion-content.
+// The wizard runs inside an Ionic modal that lives at the body level
+// (outside any parent component's encapsulated styles). To keep the
+// design consistent with the rest of the panel, the same custom palette
+// the dashboard uses is redeclared here on :host, then mapped onto the
+// Ionic CSS variables that ion-* components actually read.
 
+:host {
+  --primary: #6fd96f;
+  --primary-strong: #2e7d32;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --border: #e5e7eb;
+  --text: #1f2937;
+  --text-muted: #4b5563;
+
+  // Bind Ionic's component-level vars to the panel palette so
+  // <ion-button>, <ion-toolbar>, etc. inherit the dashboard look.
+  --ion-color-primary: var(--primary-strong);
+  --ion-color-primary-rgb: 46, 125, 50;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-shade: #246426;
+  --ion-color-primary-tint: var(--primary);
+
+  --ion-background-color: var(--surface);
+  --ion-text-color: var(--text);
+}
+
+ion-header ion-toolbar {
+  --background: var(--surface);
+  --color: var(--text);
+  --border-color: var(--border);
+}
+
+ion-title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+ion-content {
+  --background: var(--surface-muted);
+}
+
+ion-footer ion-toolbar {
+  --background: var(--surface);
+  --border-color: var(--border);
+}
+
+// ---- main primary button (Capturar / Concluir / Ativar câmera) ----
+ion-button[expand="block"] {
+  --background: var(--primary);
+  --background-hover: var(--primary-strong);
+  --background-activated: var(--primary-strong);
+  --background-focused: var(--primary-strong);
+  --color: #052e10;
+  --border-radius: 10px;
+  --box-shadow: 0 6px 18px -10px rgba(46, 125, 50, 0.5);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  height: 46px;
+}
+
+// Cancel button in the header — subdued, never the same weight as primary.
+ion-buttons[slot="start"] ion-button {
+  --color: var(--text-muted);
+  font-weight: 500;
+  text-transform: none;
+}
+
+// ---- info banner at the top ----
 .prod-note {
   display: block;
-  font-size: 12px;
-  color: var(--ion-color-medium-shade);
-  background: rgba(56, 128, 255, 0.08);
-  border-left: 3px solid var(--ion-color-primary);
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--primary-strong);
+  background: rgba(111, 217, 111, 0.12);
+  border-left: 3px solid var(--primary);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
 }
 
 .employee-name {
-  margin: 8px 0 16px;
-  color: var(--ion-color-dark);
+  margin: 4px 0 18px;
+  color: var(--text);
+  font-size: 15px;
+
+  strong {
+    color: var(--primary-strong);
+    font-weight: 600;
+  }
 }
 
+// ---- "press to enable camera" panel ----
 .permission {
   text-align: center;
-  padding: 24px 8px;
+  padding: 28px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+
+  p {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
 
   &.error {
-    color: var(--ion-color-danger);
+    border-color: rgba(220, 38, 38, 0.4);
+    background: rgba(220, 38, 38, 0.06);
+    color: #991b1b;
+
+    p strong {
+      color: #991b1b;
+    }
   }
 
   .hint {
-    color: var(--ion-color-medium);
+    color: var(--text-muted);
     font-size: 13px;
   }
 }
 
+// ---- live camera preview ----
 .preview {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
 
   video {
     width: 100%;
     max-height: 360px;
     background: #000;
     border-radius: 8px;
-    // mirror the preview so it feels like a mirror; only the preview is
-    // mirrored — the actual capture is unmirrored.
+    // Mirror the preview so it feels like looking in a mirror; the
+    // actual capture going into ArcFace is NOT mirrored.
     transform: scaleX(-1);
   }
 
@@ -54,59 +151,64 @@
   }
 
   .inline-err {
-    color: var(--ion-color-warning-shade);
+    color: #b45309;
     font-size: 12px;
+    margin: 0;
   }
 }
 
+// ---- captured thumbnails ----
 .section-title {
-  margin: 16px 0 8px;
-  color: var(--ion-color-medium-shade);
-  font-size: 13px;
+  margin: 24px 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   font-weight: 600;
 }
 
 .thumbs {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .thumb {
   position: relative;
   aspect-ratio: 1 / 1;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  background: var(--ion-color-light);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    // also mirror thumbnails so they match the preview
-    transform: scaleX(-1);
+    transform: scaleX(-1);  // match the mirrored preview
   }
 
   .remove {
     position: absolute;
-    top: 4px;
-    right: 4px;
-    background: rgba(0, 0, 0, 0.6);
+    top: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.65);
     border: none;
     color: white;
-    width: 24px;
-    height: 24px;
-    border-radius: 12px;
+    width: 26px;
+    height: 26px;
+    border-radius: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transition: background-color 0.12s ease;
 
     ion-icon {
       font-size: 16px;
     }
+
+    &:hover { background: rgba(220, 38, 38, 0.85); }
 
     &:disabled {
       opacity: 0.5;
@@ -115,11 +217,17 @@
   }
 }
 
+// ---- upload progress strip at the bottom of content ----
 .upload-progress {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 24px;
-  color: var(--ion-color-medium);
+  padding: 18px;
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 14px;
 }
