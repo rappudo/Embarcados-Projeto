@@ -37,12 +37,12 @@ docker exec -it facegate-broker mosquitto_pub -t "test/ping" -m "ok" && echo "br
 
 Os modelos não estão no repositório. Baixe e coloque em `edge/models/`:
 
-- **BlazeFace:** [download](https://github.com/google/mediapipe/tree/master/mediapipe/models)
-- **MobileFaceNet:** [download](https://github.com/deepinsight/insightface)
+- **BlazeFace:** [download](https://github.com/google/mediapipe/tree/master/mediapipe/models) — salvar como `edge/models/blaze.onnx`
+- **ArcFace:** [download](https://github.com/deepinsight/insightface) — salvar como `edge/models/arc.onnx`
 
 ## Documentação
 
-O relatório completo está em `docs/main.tex`. Para compilar: `pdflatex docs/main.tex`.
+O relatório completo está em `docs/Main.tex`. Para compilar: `pdflatex docs/Main.tex` (rodar duas vezes para resolver referências cruzadas).
 
 ## Apresentação
 

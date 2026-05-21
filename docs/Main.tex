@@ -180,7 +180,7 @@ O reconhecimento facial é uma área da Visão Computacional dedicada à identif
 
 A detecção consiste na identificação da presença de um rosto em uma imagem. Neste projeto, utiliza-se o modelo \textbf{BlazeFace} (Google MediaPipe), exportado no formato ONNX, que além das \textit{bounding boxes} fornece \textit{keypoints} faciais -- posições dos olhos, nariz e boca -- essenciais para o alinhamento do rosto antes da geração do embedding.
 
-A extração de características utiliza o modelo \textbf{MobileFaceNet}, treinado com a função de perda ArcFace no dataset MS-Celeb. O modelo gera embeddings de 128 dimensões que capturam as características discriminativas do rosto. A identificação ocorre pela comparação da distância de cosseno entre o embedding extraído e os embeddings previamente armazenados: valores abaixo de um limiar ($\approx 0{,}45$) indicam correspondência positiva.
+A extração de características utiliza o modelo \textbf{ArcFace} (\textit{InsightFace}), treinado com a função de perda \textit{Additive Angular Margin Loss} no dataset MS-Celeb. O modelo gera embeddings de 512 dimensões que capturam as características discriminativas do rosto. A identificação ocorre pela comparação da distância de cosseno entre o embedding extraído e os embeddings previamente armazenados: valores abaixo de um limiar ($\approx 0{,}50$) indicam correspondência positiva.
 
 \section{Edge Computing e Sistemas Embarcados}
 
@@ -225,9 +225,9 @@ O fluxo operacional completo ocorre nas seguintes etapas:
 \begin{enumerate}
     \item Câmera CSI captura frames continuamente.
     \item BlazeFace detecta presença de rosto e extrai \textit{keypoints} para alinhamento.
-    \item MobileFaceNet gera embedding de 128 dimensões do rosto alinhado.
+    \item ArcFace gera embedding de 512 dimensões do rosto alinhado.
     \item Embedding é comparado por distância de cosseno com o cache local SQLite.
-    \item Decisão: acesso concedido aciona relé da catraca via GPIO; acesso negado aciona buzzer.
+    \item Decisão: acesso concedido aciona o servo da catraca via GPIO (PWM por software a 50\,Hz) e acende o LED verde por 5\,s, durante os quais o reconhecimento fica pausado; acesso negado aciona o buzzer e acende o LED vermelho por 1\,s, também com o reconhecimento pausado.
     \item Evento é publicado no broker MQTT (tópico \texttt{facegate/events/access}).
     \item Subscriber Rust consome o evento e persiste no PostgreSQL.
     \item Painel Ionic + Angular consulta a API REST e exibe métricas ao gestor.
@@ -241,20 +241,21 @@ O módulo embarcado é responsável por toda a inteligência de visão computaci
 
 \begin{itemize}
     \item Raspberry Pi 4 Model B (4\,GB de RAM);
-    \item Câmera CSI de 5 megapixels;
-    \item Relé para acionamento da catraca (via GPIO);
-    \item Buzzer para sinalização de acesso negado (via GPIO).
+    \item Câmera CSI de 5 megapixels (ou stream IP via OpenCV);
+    \item Servo SG90 para acionamento da catraca (via GPIO, PWM por software);
+    \item Buzzer ativo para sinalização de acesso negado (via GPIO);
+    \item LED RGB de status (verde durante acesso concedido, vermelho durante \textit{cooldown} de acesso negado).
 \end{itemize}
 
 O software embarcado é desenvolvido em \textbf{C++17} e utiliza as seguintes bibliotecas:
 
 \begin{itemize}
-    \item \textbf{libcamera}: captura de frames via interface CSI;
-    \item \textbf{OpenCV 4.8}: pré-processamento de imagem;
-    \item \textbf{ONNXRuntime 1.17}: inferência dos modelos BlazeFace e MobileFaceNet;
-    \item \textbf{Eigen3}: cálculo de distância de cosseno entre embeddings;
+    \item \textbf{OpenCV} (\texttt{cv::VideoCapture}): captura de frames via interface CSI ou stream IP;
+    \item \textbf{OpenCV 4.8}: pré-processamento de imagem (resize, color conversion);
+    \item \textbf{ONNXRuntime 1.17}: inferência dos modelos BlazeFace e ArcFace;
+    \item \textbf{libgpiod $\geq$ 2.0}: controle dos atuadores físicos (servo da catraca, buzzer, LED RGB de status);
     \item \textbf{SQLite3}: cache local de embeddings e fila de eventos offline;
-    \item \textbf{libmosquitto}: publicação de eventos no broker MQTT.
+    \item \textbf{libmosquittopp}: publicação de eventos no broker MQTT.
 \end{itemize}
 
 \section{Backend -- Servidor Local}
@@ -280,15 +281,15 @@ A comunicação entre Raspberry e backend utiliza o protocolo \textbf{MQTT com Q
 
 \section{Painel Web e Mobile}
 
-O painel é desenvolvido em \textbf{Ionic 7 + Angular 17}, gerando uma aplicação multiplataforma instalável como \textbf{Progressive Web App} (PWA) -- funciona no browser do desktop e pode ser instalado no celular como app nativo sem necessidade de loja de aplicativos.
+O painel é desenvolvido em \textbf{Ionic 8 + Angular 20}, gerando uma aplicação multiplataforma instalável como \textbf{Progressive Web App} (PWA) -- funciona no browser do desktop e pode ser instalado no celular como app nativo sem necessidade de loja de aplicativos.
 
 As telas planejadas para o MVP são:
 
 \begin{itemize}
     \item \textbf{Login}: autenticação JWT com \textit{guard} de rotas protegidas;
-    \item \textbf{Dashboard}: cards de resumo e gráfico de fluxo de acessos por hora (ngx-echarts);
-    \item \textbf{Funcionários}: listagem, cadastro e upload de foto para geração de embedding;
-    \item \textbf{Histórico de eventos}: tabela paginada com filtros por funcionário e data;
+    \item \textbf{Dashboard}: cards de resumo, gráfico de fluxo de acessos por hora e card dedicado aos rostos não reconhecidos nos últimos 7 dias (visualizações em SVG inline);
+    \item \textbf{Funcionários}: listagem, cadastro com \emph{wizard de captura facial no browser} (BlazeFace + ArcFace via \texttt{onnxruntime-web}; apenas o vetor de 512 floats é enviado);
+    \item \textbf{Histórico de eventos}: tabela paginada com filtros por funcionário e data, e exportação em CSV pronta para Excel/Sheets (UTF-8 BOM + \texttt{;});
     \item \textbf{Analytics}: atraso médio por funcionário e heatmap de presença por dia/hora.
 \end{itemize}
 
@@ -309,8 +310,8 @@ O grupo é composto por quatro integrantes com as seguintes responsabilidades pr
 Integrante & Foco principal & Responsabilidades \\
 \midrule
 Ramon & Edge C++ + Rust crítico &
-    Setup toolchain Raspberry, pipeline de visão (BlazeFace, MobileFaceNet, Eigen3),
-    GPIO, autenticação JWT, sync de embeddings, ajuste de threshold \\
+    Setup toolchain Raspberry, pipeline de visão (BlazeFace, ArcFace),
+    GPIO via libgpiod, autenticação JWT, sync de embeddings, ajuste de threshold \\
 \addlinespace
 Nícolas & Backend + banco &
     Setup PostgreSQL/pgvector, Mosquitto, subscriber MQTT,
@@ -390,10 +391,10 @@ O diagrama de Gantt a seguir apresenta a distribuição das atividades ao longo 
 \ganttbar[bar/.append style={fill=blue!70, draw=black}]{1.6 MQTT ponta a ponta}{3}{3} \\
  
 \ganttgroup{Fase 2 -- Visão Comp}{2}{5} \\
-\ganttbar[bar/.append style={fill=green!40}]{2.1 Captura libcamera C++}{2}{2} \\
-\ganttbar[bar/.append style={fill=green!40}]{2.2 Detecção ONNX}{3}{3} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.1 Captura OpenCV cv::VideoCapture}{2}{2} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.2 Detecção ONNX (BlazeFace)}{3}{3} \\
 \ganttbar[bar/.append style={fill=green!40}]{2.3 Alinhamento facial}{3}{4} \\
-\ganttbar[bar/.append style={fill=green!40}]{2.4 Embedding MobileFace}{4}{4} \\
+\ganttbar[bar/.append style={fill=green!40}]{2.4 Embedding ArcFace}{4}{4} \\
 \ganttbar[bar/.append style={fill=green!70, draw=black}]{2.5 Comparação + threshold}{4}{5} \\
 \ganttbar[bar/.append style={fill=green!40}]{2.6 CLI de enrollment SQLite}{5}{5} \\
  
@@ -485,12 +486,13 @@ Raspberry Pi 4 Model B -- 4\,GB & 1 & 650,00 \\
 Câmera CSI 5MP (compatível RPi) & 1 & 120,00 \\
 Cartão microSD 32\,GB (Class 10) & 1 & 40,00 \\
 Fonte de alimentação USB-C 5V/3A & 1 & 50,00 \\
-Módulo relé 5V (acionamento catraca) & 1 & 15,00 \\
+Servo SG90 (acionamento catraca) & 1 & 15,00 \\
 Buzzer ativo 5V & 1 & 8,00 \\
+LED RGB de status + resistores (220\,$\Omega$) & 1 & 5,00 \\
 Catraca de barreira (demonstração) & 1 & 180,00 \\
 Jumpers e protoboard & 1 kit & 25,00 \\
 \midrule
-\textbf{Total estimado} & & \textbf{R\$ 1.088,00} \\
+\textbf{Total estimado} & & \textbf{R\$ 1.093,00} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -503,9 +505,14 @@ Os custos de software são nulos: todas as tecnologias utilizadas -- Rust, C++, 
 
 \section{Coleta de Dados e Cadastro de Funcionários}
 
-O cadastro de um funcionário no sistema ocorre por meio de uma ferramenta de linha de comando (\textit{enrollment CLI}) desenvolvida em C++. O operador captura múltiplas fotos do funcionário em diferentes condições de iluminação e ângulo. Para cada imagem, o pipeline extrai o embedding via MobileFaceNet. O vetor resultante é armazenado na tabela \texttt{embeddings} do PostgreSQL, associado ao identificador do funcionário.
+O cadastro de um funcionário no sistema ocorre por dois caminhos complementares, ambos extraindo o embedding via ArcFace e armazenando o vetor resultante na tabela \texttt{embeddings} do PostgreSQL, associado ao identificador do funcionário:
 
-Nenhuma imagem bruta é persistida no banco de dados -- apenas os vetores de 128 dimensões. Isso atende diretamente ao princípio de minimização de dados da LGPD.
+\begin{itemize}
+    \item \textbf{CLI \texttt{enroll}} (C++, no Raspberry Pi): o operador captura múltiplas fotos diretamente pela câmera do edge, em diferentes condições de iluminação e ângulo, e o binário roda o pipeline BlazeFace + ArcFace localmente. Útil para cadastro presencial no local de instalação.
+    \item \textbf{Wizard no painel} (Ionic + Angular, via \texttt{onnxruntime-web}): o cadastro de funcionário no painel abre um modal de captura que usa a câmera do dispositivo do operador (notebook ou celular) e executa BlazeFace + ArcFace \emph{dentro do browser}. \textbf{A imagem bruta nunca trafega na rede} -- apenas o vetor L2-normalizado de 512 floats é enviado ao endpoint \texttt{POST /employees/:id/embeddings}.
+\end{itemize}
+
+Nenhuma imagem bruta é persistida no banco de dados -- apenas os vetores de 512 dimensões. Isso atende diretamente ao princípio de minimização de dados da LGPD. No caminho via painel, a inferência \textit{on-device} adiciona uma camada extra: o dado biométrico nunca sai do dispositivo de captura.
 
 \section{Definição do Limiar de Autenticação}
 
@@ -516,7 +523,7 @@ O limiar de decisão (distância de cosseno) será ajustado empiricamente. Serã
     \item Embeddings de indivíduos diferentes (testes negativos).
 \end{itemize}
 
-O objetivo é encontrar o valor que minimize simultaneamente a Taxa de Falsos Positivos (FAR -- \textit{False Accept Rate}) e a Taxa de Falsos Negativos (FRR -- \textit{False Reject Rate}). O valor inicial de referência é 0,45, com ajuste conforme os resultados dos testes.
+O objetivo é encontrar o valor que minimize simultaneamente a Taxa de Falsos Positivos (FAR -- \textit{False Accept Rate}) e a Taxa de Falsos Negativos (FRR -- \textit{False Reject Rate}). O valor inicial de referência adotado é 0,50, calibrado para a distribuição de distâncias do ArcFace -- mais alta que a faixa típica de MobileFaceNet ($\approx 0{,}45$), e ajustável conforme os resultados dos testes empíricos.
 
 \section{Testes e Avaliação}
 
@@ -611,17 +618,17 @@ Camada & Tecnologia & Versão & Função \\
 Edge -- linguagem & C++17 & GCC 12+ & Pipeline de visão e GPIO \\
 Edge -- visão & OpenCV & 4.8 & Captura e pré-processamento \\
 Edge -- inferência & ONNXRuntime & 1.17 & Execução dos modelos ONNX \\
-Edge -- álgebra & Eigen3 & 3.4 & Distância de cosseno \\
+Edge -- GPIO & libgpiod & $\geq$2.0 & Controle de servo, buzzer e LED \\
 Edge -- cache & SQLite & 3.x & Embeddings e fila offline \\
-Edge -- MQTT & libmosquitto & 2.x & Publicação de eventos \\
+Edge -- MQTT & libmosquittopp & 2.x & Publicação de eventos \\
 Broker & Eclipse Mosquitto & 2.x & Roteamento MQTT \\
 Backend & Rust + Axum & 1.78 / 0.7 & API REST \\
 Backend -- banco & sqlx & 0.7 & Queries compile-time \\
 Backend -- MQTT & rumqttc & 0.24 & Subscriber assíncrono \\
 Backend -- auth & jsonwebtoken & 9.x & JWT HS256 \\
 Banco de dados & PostgreSQL + pgvector & 16 / 0.6 & Persistência + busca vetorial \\
-Frontend & Ionic + Angular & 7 / 17 & Painel web/mobile PWA \\
-Frontend -- gráficos & ngx-echarts & 17.x & Visualizações de analytics \\
+Frontend & Ionic + Angular & 8 / 20 & Painel web/mobile PWA \\
+Frontend -- visão (browser) & onnxruntime-web & 1.26 & BlazeFace + ArcFace para enrollment \\
 \bottomrule
 \end{tabular}
 \end{table}
