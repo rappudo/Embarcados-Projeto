@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import {
   IonButton,
@@ -21,10 +22,12 @@ import {
   IonLabel,
 } from '@ionic/angular/standalone';
 import { HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
 import { EventCardComponent } from '../event-card/event-card.component';
 import { EmployeesService, Funcionario } from '../employees/employees.service';
-import { AnalyticsService } from '../analytics/analytics.service';
+import { AnalyticsService, EventRow } from '../analytics/analytics.service';
+import { AuthService } from '../auth/auth.service';
 
 interface Evento {
   titulo: string;
@@ -61,7 +64,15 @@ interface AcessoDiaSemanaItem {
   count: number;
 }
 
-type DashboardTab = 'dashboard' | 'funcionarios' | 'cadastro' | 'eventos';
+type DashboardTab =
+  | 'dashboard'
+  | 'funcionarios'
+  | 'cadastro'
+  | 'eventos'
+  | 'exportar';
+
+const EXPORT_PAGE_SIZE = 200;
+const EXPORT_MAX_PAGES = 50;
 
 const TOLERANCIA_ATRASO_MIN = 15;
 
@@ -107,6 +118,8 @@ export class DashboardPage implements OnInit {
   private http = inject(HttpClient);
   private employees = inject(EmployeesService);
   private analytics = inject(AnalyticsService);
+  private auth = inject(AuthService);
+  private router = inject(Router);
 
   activeTab: DashboardTab = 'dashboard';
 
@@ -121,8 +134,13 @@ export class DashboardPage implements OnInit {
   // KPIs / dados derivados
   totalFuncionarios = 0;
   totalAtrasos = 0;
-  pontualidadePct = 0;
   atrasoMedioMin = 0;
+
+  // Não reconhecidos (últimos 7 dias)
+  naoRecCount = 0;
+  naoRecPorDia: { dia: string; count: number }[] = [];
+  maxNaoRecPorDia = 1;
+  ultimosNaoRec: EventRow[] = [];
 
   acessosPorHora: AcessoHoraItem[] = [];
   maxAcessosHora = 0;
@@ -142,13 +160,20 @@ export class DashboardPage implements OnInit {
   cadastroError = '';
   cadastroSuccess = '';
 
+  // Exportar dados
+  exportSelectedEmployees: number[] = [];
+  exportLimitOptions: number[] = [50, 100, 200, 500, 1000];
+  exportLimit = 100;
+  exportFrom = '';
+  exportTo = '';
+  exportLoading = false;
+  exportError = '';
+  exportSuccess = '';
+
   ngOnInit(): void {
     this.reloadFuncionarios();
 
-    this.analytics.summaryToday().subscribe((s) => {
-      this.pontualidadePct =
-        s.total > 0 ? Math.round((s.granted / s.total) * 100) : 0;
-    });
+    this.loadUnknowns();
 
     this.analytics.avgDelay().subscribe((rows) => {
       this.totalAtrasos = rows.filter(
@@ -193,6 +218,111 @@ export class DashboardPage implements OnInit {
 
   setTab(tab: DashboardTab): void {
     this.activeTab = tab;
+  }
+
+  logout(): void {
+    this.auth.logout();
+    this.router.navigateByUrl('/login');
+  }
+
+  // ---------- Não reconhecidos ----------
+
+  private loadUnknowns(): void {
+    console.log('[unknowns] requesting events?status=unknown&limit=200');
+    this.analytics.events({ status: 'unknown', limit: 200 }).subscribe({
+      next: (rows) => {
+        console.log('[unknowns] rows received:', rows.length, rows.slice(0, 3));
+
+        const dayLabels: string[] = [];
+        const byDay = new Map<string, number>();
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const key = this.spDayKey(d.getTime());
+          dayLabels.push(key);
+          byDay.set(key, 0);
+        }
+        console.log('[unknowns] dayLabels (last 7 days):', dayLabels);
+
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        console.log('[unknowns] cutoff ms:', cutoff, 'now ms:', Date.now());
+
+        let count = 0;
+        let skippedOldCutoff = 0;
+        let skippedMissingKey = 0;
+        for (const r of rows) {
+          if (r.timestamp_ms < cutoff) {
+            skippedOldCutoff++;
+            continue;
+          }
+          const key = this.spDayKey(r.timestamp_ms);
+          if (byDay.has(key)) {
+            byDay.set(key, byDay.get(key)! + 1);
+            count++;
+          } else {
+            skippedMissingKey++;
+            if (skippedMissingKey <= 3) {
+              console.warn(
+                '[unknowns] key not in dayLabels:',
+                key,
+                'ts_ms:',
+                r.timestamp_ms,
+              );
+            }
+          }
+        }
+        console.log(
+          '[unknowns] counted:',
+          count,
+          'skipped(old):',
+          skippedOldCutoff,
+          'skipped(no-key):',
+          skippedMissingKey,
+        );
+
+        this.naoRecCount = count;
+        this.naoRecPorDia = dayLabels.map((dia) => ({
+          dia,
+          count: byDay.get(dia) ?? 0,
+        }));
+        this.maxNaoRecPorDia = Math.max(
+          1,
+          ...this.naoRecPorDia.map((d) => d.count),
+        );
+        this.ultimosNaoRec = rows.slice(0, 6);
+      },
+      error: (err) => {
+        console.error('[unknowns] API error:', err);
+      },
+    });
+  }
+
+  private spDayKey(ms: number): string {
+    const fmt = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+    });
+    return fmt.format(new Date(ms));
+  }
+
+  formatUnknownTime(ms: number): string {
+    const fmt = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(new Date(ms));
+    const get = (t: string) =>
+      parts.find((p) => p.type === t)?.value ?? '';
+    return `${get('day')}/${get('month')} ${get('hour')}:${get('minute')}`;
+  }
+
+  formatDistance(d: number | null): string {
+    return d === null || d === undefined ? '—' : d.toFixed(2);
   }
 
   // ---------- Cadastro ----------
@@ -320,5 +450,153 @@ export class DashboardPage implements OnInit {
     this.selectedFuncionario = f;
     this.searchTerm = '';
     this.funcionariosFiltrados = [];
+  }
+
+  // ---------- Aba Exportar ----------
+
+  exportSelectAllEmployees(): void {
+    this.exportSelectedEmployees = this.funcionarios.map((f) => f.id);
+  }
+
+  exportClearEmployees(): void {
+    this.exportSelectedEmployees = [];
+  }
+
+  async submitExport(): Promise<void> {
+    if (this.exportLoading) return;
+    this.exportError = '';
+    this.exportSuccess = '';
+
+    const fromMs = this.parseDateTimeLocal(this.exportFrom);
+    const toMs = this.parseDateTimeLocal(this.exportTo);
+    if (fromMs !== undefined && toMs !== undefined && fromMs > toMs) {
+      this.exportError = 'O início do período deve ser anterior ao fim.';
+      return;
+    }
+
+    this.exportLoading = true;
+    try {
+      const targets: (number | undefined)[] =
+        this.exportSelectedEmployees.length === 0
+          ? [undefined]
+          : [...this.exportSelectedEmployees];
+
+      const collected: EventRow[] = [];
+      for (const empId of targets) {
+        const batch = await this.fetchGrantedEvents(
+          empId,
+          fromMs,
+          toMs,
+          this.exportLimit,
+        );
+        collected.push(...batch);
+      }
+
+      collected.sort((a, b) => b.timestamp_ms - a.timestamp_ms);
+      const top = collected.slice(0, this.exportLimit);
+
+      if (top.length === 0) {
+        this.exportError = 'Nenhum evento encontrado para os filtros selecionados.';
+        return;
+      }
+
+      this.downloadEventsCsv(top);
+      this.exportSuccess = `Exportados ${top.length} evento(s).`;
+    } catch (err) {
+      const status = err instanceof HttpErrorResponse ? err.status : undefined;
+      if (status === 0) {
+        this.exportError = 'Não foi possível conectar ao servidor.';
+      } else {
+        this.exportError = 'Erro ao exportar eventos. Tente novamente.';
+      }
+    } finally {
+      this.exportLoading = false;
+    }
+  }
+
+  private async fetchGrantedEvents(
+    employeeId: number | undefined,
+    from: number | undefined,
+    to: number | undefined,
+    max: number,
+  ): Promise<EventRow[]> {
+    const rows: EventRow[] = [];
+    let offset = 0;
+    for (let page = 0; page < EXPORT_MAX_PAGES && rows.length < max; page++) {
+      const pageSize = Math.min(EXPORT_PAGE_SIZE, max - rows.length);
+      const batch = await firstValueFrom(
+        this.analytics.events({
+          status: 'granted',
+          employee_id: employeeId,
+          from,
+          to,
+          limit: pageSize,
+          offset,
+        }),
+      );
+      if (!batch.length) break;
+      rows.push(...batch);
+      if (batch.length < pageSize) break;
+      offset += batch.length;
+    }
+    return rows;
+  }
+
+  private parseDateTimeLocal(s: string): number | undefined {
+    if (!s) return undefined;
+    const t = new Date(s).getTime();
+    return Number.isFinite(t) ? t : undefined;
+  }
+
+  private downloadEventsCsv(events: EventRow[]): void {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fmtDate = (ms: number): string => {
+      const d = new Date(ms);
+      return (
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+        `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+      );
+    };
+    const fmtDistance = (v: number | null): string =>
+      v === null || v === undefined ? '' : v.toFixed(4).replace('.', ',');
+    const escape = (v: string | number | null | undefined): string => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const header = ['ID', 'Funcionário', 'Status', 'Distância', 'Data/Hora'];
+    const lines = [
+      header.map(escape).join(';'),
+      ...events.map((e) =>
+        [
+          e.id,
+          e.employee_name ?? 'Desconhecido',
+          e.status,
+          fmtDistance(e.distance),
+          fmtDate(e.timestamp_ms),
+        ]
+          .map(escape)
+          .join(';'),
+      ),
+    ];
+
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const stamp =
+      `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+      `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const filename = `facegate-eventos-${stamp}.csv`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }

@@ -1,0 +1,46 @@
+.section-title {
+  margin: 24px 0 12px;
+  color: var(--ion-color-medium-shade);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+// 4 cards. Grid breakpoints (mobile-first):
+//   default      → 2x2 (2 columns)
+//   ≥ 768px      → 4 columns in one row
+//   ≥ 320px-only → 1 column when the screen really can't fit two cards
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 360px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-container {
+  height: 280px;
+  width: 100%;
+}
+
+.chart-loading {
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ion-color-medium);
+  background: var(--ion-card-background, #fff);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}

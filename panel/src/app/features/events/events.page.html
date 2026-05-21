@@ -1,0 +1,84 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button menu="main-menu"></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Eventos</ion-title>
+  </ion-toolbar>
+
+  <!--
+    Second toolbar in the header holds the status segment.
+    It stays pinned at the top while the list scrolls below.
+  -->
+  <ion-toolbar>
+    <ion-segment [value]="filterStatus()" (ionChange)="onStatusChange($event)">
+      <ion-segment-button value="all">
+        <ion-label>Todos</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="granted">
+        <ion-label>Concedidos</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="unknown">
+        <ion-label>Desconhecidos</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Employee filter (sits at the top of scrollable content) -->
+  <ion-list>
+    <ion-item>
+      <ion-select
+        label="Funcionário"
+        labelPlacement="floating"
+        interface="popover"
+        [value]="filterEmployeeId()"
+        (ionChange)="onEmployeeFilterChange($event)"
+      >
+        <ion-select-option [value]="null">Todos</ion-select-option>
+        @for (emp of employees(); track emp.id) {
+        <ion-select-option [value]="emp.id">{{ emp.name }}</ion-select-option>
+        }
+      </ion-select>
+    </ion-item>
+  </ion-list>
+
+  <!-- Body: loading, empty, or list -->
+  @if (loading()) {
+  <div class="centered">
+    <ion-spinner name="dots"></ion-spinner>
+  </div>
+  } @else if (events().length === 0) {
+  <div class="centered empty-state">
+    <p>Nenhum evento encontrado.</p>
+    <p class="hint">Ajuste os filtros ou publique um evento via MQTT.</p>
+  </div>
+  } @else {
+  <ion-list>
+    @for (evt of events(); track evt.id) {
+    <app-event-card [event]="evt" />
+    }
+  </ion-list>
+  }
+
+  <!--
+    Infinite scroll: fires (ionInfinite) when the user nears the bottom.
+    Disable it once we know there's no more data, so it doesn't keep
+    firing forever on a list that's already complete.
+  -->
+  <ion-infinite-scroll
+    (ionInfinite)="onLoadMore($event)"
+    [disabled]="!hasMore() || loading()"
+  >
+    <ion-infinite-scroll-content
+      loadingSpinner="dots"
+      loadingText="Carregando mais..."
+    >
+    </ion-infinite-scroll-content>
+  </ion-infinite-scroll>
+</ion-content>

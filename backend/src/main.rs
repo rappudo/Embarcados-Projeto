@@ -33,9 +33,14 @@ async fn main() -> Result<()> {
         mqtt::start_subscriber(pool.clone(), config.mqtt_host.clone(), config.mqtt_port).await?;
     info!("MQTT subscriber spawned");
 
-    // Configure strict CORS for the frontend
+    // Configure strict CORS for the frontend (allow both localhost and
+    // 127.0.0.1 since some browsers resolve `localhost` to ::1 and the
+    // frontend may be reached via either hostname during dev).
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:8100".parse::<HeaderValue>().unwrap())
+        .allow_origin([
+            "http://localhost:8100".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:8100".parse::<HeaderValue>().unwrap(),
+        ])
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -49,7 +54,10 @@ async fn main() -> Result<()> {
     let app =
         routes::create_router(pool, config.jwt_secret, mqtt_state, mqtt_client).layer(cors);
 
-    let addr = format!("0.0.0.0:{}", config.server_port);
+    // [::] binds both IPv4 and IPv6 via IPv4-mapped IPv6 (Linux default).
+    // 0.0.0.0 would leave `localhost` -> ::1 requests from browsers
+    // dangling with ECONNREFUSED.
+    let addr = format!("[::]:{}", config.server_port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     info!("Servidor rodando em http://{}", addr);
 

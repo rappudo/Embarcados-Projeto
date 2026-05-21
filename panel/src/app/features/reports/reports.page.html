@@ -1,0 +1,78 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button menu="main-menu"></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Relatórios</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @if (loading()) {
+  <div class="centered">
+    <ion-spinner name="dots"></ion-spinner>
+  </div>
+  } @else {
+  <!-- ============== Average delay ============== -->
+  <h3 class="section-title">Atraso médio por funcionário</h3>
+  @if (delays().length === 0) {
+  <p class="empty">
+    Sem dados ainda. Funcionários precisam ter turno definido e ao menos um
+    acesso registrado.
+  </p>
+  } @else {
+  <div class="table-wrap">
+    <table class="delay-table">
+      <thead>
+        <tr>
+          <th>Funcionário</th>
+          <th class="num">Atraso médio (min)</th>
+          <th class="num">Dias observados</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of delays(); track row.employee_id) {
+        <tr>
+          <td>{{ row.name }}</td>
+          <td
+            class="num"
+            [class.late]="row.avg_delay_minutes > 0"
+            [class.early]="row.avg_delay_minutes < 0"
+          >
+            {{ row.avg_delay_minutes | number:'1.1-1' }}
+          </td>
+          <td class="num">{{ row.days_observed }}</td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  }
+
+  <!-- ============== Presence heatmap ============== -->
+  <h3 class="section-title">Mapa de presença (dia × hora)</h3>
+  @if (heatmapOpts(); as opts) {
+  <div echarts [options]="opts" class="heatmap-container"></div>
+  } @else {
+  <p class="empty">Sem dados para gerar o mapa.</p>
+  }
+
+  <!-- ============== Export ============== -->
+  <h3 class="section-title">Exportar</h3>
+  <ion-button
+    expand="block"
+    fill="outline"
+    [disabled]="exporting()"
+    (click)="exportCsv()"
+  >
+    @if (exporting()) {
+    <ion-spinner name="dots"></ion-spinner>
+    } @else {
+    <ion-icon name="download-outline" slot="start"></ion-icon>
+    Baixar últimos 1000 eventos (CSV) }
+  </ion-button>
+  <ion-note class="export-note">
+    PDF e Excel serão adicionados em uma versão futura.
+  </ion-note>
+  }
+</ion-content>

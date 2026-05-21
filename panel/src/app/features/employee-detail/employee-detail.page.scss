@@ -1,0 +1,74 @@
+.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+
+  &.small {
+    height: 80px;
+  }
+}
+
+.profile-header {
+  text-align: center;
+  padding: 24px 0 16px;
+}
+
+h1 {
+  margin: 16px 0 0;
+  color: var(--ion-color-dark);
+  font-weight: 600;
+}
+
+// Override the .initial-avatar class (defined in employee-card.component.scss)
+// for the larger detail-page version. We redefine here because component
+// styles are scoped — the card's SCSS doesn't bleed into this page.
+.initial-avatar {
+  background: var(--ion-color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+
+  span {
+    color: white;
+    font-weight: 600;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  &.large {
+    width: 96px;
+    height: 96px;
+
+    span {
+      font-size: 42px;
+    }
+  }
+}
+
+.no-shift {
+  font-style: italic;
+  color: var(--ion-color-medium);
+}
+
+.section-title {
+  margin: 24px 0 12px;
+  color: var(--ion-color-medium-shade);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.empty-events {
+  text-align: center;
+  color: var(--ion-color-medium);
+  padding: 16px;
+  font-size: 14px;
+}
+
+.divider-icon {
+  margin-right: 8px;
+  vertical-align: middle;
+}

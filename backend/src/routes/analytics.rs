@@ -158,27 +158,38 @@ pub async fn avg_delay(
     let rows = sqlx::query_as::<_, AvgDelay>(
         r#"
         WITH first_per_day AS (
+            -- direction='in' is critical: without it, the noite shift's
+            -- 06:00 exit event becomes the MIN for the following day,
+            -- producing a ~-16h delta vs the 22:00 shift start.
             SELECT
                 e.employee_id,
                 DATE(to_timestamp(e.timestamp_ms / 1000.0) AT TIME ZONE $1) AS day,
                 MIN(e.timestamp_ms) AS first_ms
             FROM access_events e
-            WHERE e.status = 'granted' AND e.employee_id IS NOT NULL
+            WHERE e.status = 'granted'
+              AND e.employee_id IS NOT NULL
+              AND e.direction = 'in'
             GROUP BY e.employee_id, day
         ),
         delays AS (
+            -- Normalize the raw delta to (-12h, +12h] so a noite entry
+            -- that lands just past midnight (e.g., 00:30) reads as +150
+            -- min late instead of -1290 min early.
             SELECT
                 f.employee_id,
                 emp.name,
-                EXTRACT(EPOCH FROM (
-                    (to_timestamp(f.first_ms / 1000.0) AT TIME ZONE $1)::time
-                    - CASE emp.shift
-                        WHEN 'manhã' THEN TIME '08:00'
-                        WHEN 'tarde' THEN TIME '14:00'
-                        WHEN 'noite' THEN TIME '22:00'
-                        ELSE NULL
-                      END
-                )) / 60.0 AS delay_min
+                ((MOD(
+                    EXTRACT(EPOCH FROM (
+                        (to_timestamp(f.first_ms / 1000.0) AT TIME ZONE $1)::time
+                        - CASE emp.shift
+                            WHEN 'manhã' THEN TIME '08:00'
+                            WHEN 'tarde' THEN TIME '14:00'
+                            WHEN 'noite' THEN TIME '22:00'
+                            ELSE NULL
+                          END
+                    ))::numeric + 43200 + 86400,
+                    86400
+                ) - 43200) / 60.0)::float8 AS delay_min
             FROM first_per_day f
             JOIN employees emp ON emp.id = f.employee_id
             WHERE emp.shift IS NOT NULL

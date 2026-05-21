@@ -1,8 +1,11 @@
 #include "./turnstile.hpp"
 
 #include <gpiod.h>
+#include <pthread.h>
+#include <sched.h>
 
 #include <chrono>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -13,6 +16,7 @@ namespace facegate::hardware {
 namespace {
 
 constexpr int kPwmPeriodUs = 20000;  // 50 Hz — standard servo control frequency
+constexpr int kCloseHoldMs = 500;    // Long enough for an SG90 to travel ~180°.
 
 }  // namespace
 
@@ -26,11 +30,13 @@ Turnstile::Turnstile(const char* chip_path,
                      int line_offset,
                      int open_hold_ms,
                      bool enabled,
-                     int open_pulse_us)
+                     int open_pulse_us,
+                     int closed_pulse_us)
     : impl_(nullptr),
       open_hold_ms_(open_hold_ms),
       enabled_(enabled),
-      open_pulse_us_(open_pulse_us) {
+      open_pulse_us_(open_pulse_us),
+      closed_pulse_us_(closed_pulse_us) {
     if (!enabled_) {
         std::cerr << "Turnstile: GPIO disabled (mock mode)\n";
         return;
@@ -117,12 +123,49 @@ void Turnstile::grant_access() {
     cv_.notify_all();
 }
 
+void Turnstile::emit_pulse_cycle(int pulse_us) {
+    gpiod_line_request_set_value(
+        impl_->request, impl_->offset, GPIOD_LINE_VALUE_ACTIVE);
+    std::this_thread::sleep_for(std::chrono::microseconds(pulse_us));
+    gpiod_line_request_set_value(
+        impl_->request, impl_->offset, GPIOD_LINE_VALUE_INACTIVE);
+    const int rest_us = kPwmPeriodUs - pulse_us;
+    if (rest_us > 0) {
+        std::this_thread::sleep_for(std::chrono::microseconds(rest_us));
+    }
+}
+
+void Turnstile::emit_pulses_for(int pulse_us, int duration_ms) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
+    while (!stop_.load() && std::chrono::steady_clock::now() < deadline) {
+        emit_pulse_cycle(pulse_us);
+    }
+}
+
+void Turnstile::set_thread_realtime_best_effort() {
+    // SCHED_FIFO at the max priority keeps detection/encoding work from
+    // preempting us mid-pulse, which is what made the servo twitch under load.
+    // Requires CAP_SYS_NICE (or root); falls back silently with a warning.
+    sched_param sp{};
+    sp.sched_priority = sched_get_priority_max(SCHED_FIFO);
+    const int rc = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+    if (rc != 0) {
+        std::cerr << "Turnstile: SCHED_FIFO unavailable ("
+                  << std::strerror(rc)
+                  << ") — pulses may jitter under load\n";
+    }
+}
+
 void Turnstile::pwm_loop() {
-    // The servo is energized ONLY during the open window. While closed, the
-    // line is held LOW and the thread sleeps on the condvar. grant_access()
-    // wakes it; it pulses at 50 Hz until open_until_ elapses, then drops the
-    // line and goes back to sleep. Closed position is held mechanically (bar
-    // weight / spring) since no PWM = no servo torque.
+    set_thread_realtime_best_effort();
+
+    // Drive to a known closed position at boot — without this the servo holds
+    // whatever angle it happened to be in when powered on.
+    emit_pulses_for(closed_pulse_us_, kCloseHoldMs);
+    gpiod_line_request_set_value(
+        impl_->request, impl_->offset, GPIOD_LINE_VALUE_INACTIVE);
+
     while (!stop_.load()) {
         std::chrono::steady_clock::time_point target;
         {
@@ -135,29 +178,20 @@ void Turnstile::pwm_loop() {
         }
         if (stop_.load()) break;
 
-        // Emit PWM pulses until the open window expires.
+        // Pulse the open angle until the window expires, picking up any
+        // extension to open_until_ that arrived mid-cycle.
         while (!stop_.load()) {
             const auto current = std::chrono::steady_clock::now();
             if (current >= target) break;
-
-            gpiod_line_request_set_value(
-                impl_->request, impl_->offset, GPIOD_LINE_VALUE_ACTIVE);
-            std::this_thread::sleep_for(std::chrono::microseconds(open_pulse_us_));
-            gpiod_line_request_set_value(
-                impl_->request, impl_->offset, GPIOD_LINE_VALUE_INACTIVE);
-
-            const int rest_us = kPwmPeriodUs - open_pulse_us_;
-            if (rest_us > 0) {
-                std::this_thread::sleep_for(std::chrono::microseconds(rest_us));
-            }
-
-            // Pick up any extension to open_until_ that arrived mid-cycle.
+            emit_pulse_cycle(open_pulse_us_);
             std::lock_guard<std::mutex> lock(mutex_);
             target = open_until_;
         }
 
-        // Ensure the line is LOW once the window closes so the servo is fully
-        // de-energized (no holding torque, no leaked pulses).
+        // Actively command the closed angle for long enough that the servo
+        // physically travels back, then de-energize. Without this active
+        // close phase the servo just stays where the last open pulse left it.
+        emit_pulses_for(closed_pulse_us_, kCloseHoldMs);
         gpiod_line_request_set_value(
             impl_->request, impl_->offset, GPIOD_LINE_VALUE_INACTIVE);
     }

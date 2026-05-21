@@ -1,0 +1,48 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>FaceGateway</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div class="login-wrapper">
+    <h2>Entrar no painel</h2>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <ion-item>
+        <ion-input
+          label="Email"
+          labelPlacement="floating"
+          type="email"
+          autocomplete="email"
+          formControlName="email"
+        >
+        </ion-input>
+      </ion-item>
+
+      <ion-item>
+        <ion-input
+          label="Senha"
+          labelPlacement="floating"
+          type="password"
+          autocomplete="current-password"
+          formControlName="password"
+        >
+        </ion-input>
+      </ion-item>
+
+      <ion-button
+        expand="block"
+        type="submit"
+        class="ion-margin-top"
+        [disabled]="form.invalid || loading()"
+      >
+        @if (loading()) {
+          <ion-spinner name="dots"></ion-spinner>
+        } @else {
+          Entrar
+        }
+      </ion-button>
+    </form>
+  </div>
+</ion-content>

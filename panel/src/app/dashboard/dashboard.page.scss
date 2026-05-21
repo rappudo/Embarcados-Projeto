@@ -12,7 +12,26 @@
 .dashboard-header {
   --ion-background-color: #ffffff;
   height: 10%;
-  align-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-logout-btn {
+  --color: var(--text-muted);
+  --background-hover: rgba(220, 38, 38, 0.08);
+  --color-hover: #b91c1c;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: none;
+  margin: 0;
+}
+
+.dashboard-logout-btn ion-icon {
+  margin-right: 6px;
+  font-size: 18px;
 }
 
 .dashboard-toolbar {
@@ -299,6 +318,7 @@ ion-card.kpi-card {
 .kpi-icon-success  { background: rgba(34, 197, 94, 0.14);  color: #16a34a; }
 .kpi-icon-warn     { background: rgba(251, 191, 36, 0.18); color: #b45309; }
 .kpi-icon-info     { background: rgba(96, 165, 250, 0.18); color: #1d4ed8; }
+.kpi-icon-alert    { background: rgba(220, 38, 38, 0.14);  color: #dc2626; }
 
 .kpi-text {
   display: flex;
@@ -413,6 +433,7 @@ ion-card.chart-card {
 
 .bar-chart-bar-primary { background: var(--primary); }
 .bar-chart-bar-warn    { background: #f59e0b; }
+.bar-chart-bar-alert   { background: #dc2626; }
 
 .bar-chart-label {
   font-size: 10px;
@@ -560,6 +581,94 @@ ion-card.chart-card {
   }
 }
 
+/* Não reconhecidos */
+
+.unrecognized-card-content {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 24px;
+  align-items: stretch;
+  padding: 18px 20px 22px;
+}
+
+.unrecognized-chart {
+  height: 200px;
+}
+
+.unrecognized-subtitle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.unrecognized-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.unrecognized-side-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.unrecognized-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unrecognized-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.unrec-time {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.unrec-distance {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.unrec-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.12);
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .unrecognized-card-content {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Cadastro */
 
 ion-card.cadastro-card {
@@ -595,4 +704,54 @@ ion-card.cadastro-card {
 .cadastro-submit {
   margin-top: 18px;
   --border-radius: 10px;
+}
+
+/* Exportar Dados */
+
+ion-card.export-card {
+  margin: 0;
+  max-width: 640px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.export-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.export-flex {
+  flex: 1 1 220px;
+}
+
+.export-employee-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  flex-wrap: wrap;
+}
+
+.export-emp-btn {
+  --border-radius: 8px;
+  margin: 0;
+}
+
+.export-emp-count {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .export-row {
+    flex-direction: column;
+  }
+
+  .export-emp-count {
+    margin-left: 0;
+  }
 }

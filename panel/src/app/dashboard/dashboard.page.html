@@ -1,5 +1,14 @@
 <ion-header class="dashboard-header">
     <h1 class="dashboard-logo">Face<span>Gate</span></h1>
+    <ion-button
+      fill="clear"
+      class="dashboard-logout-btn"
+      (click)="logout()"
+      title="Sair"
+    >
+      <ion-icon slot="start" name="log-out-outline"></ion-icon>
+      Sair
+    </ion-button>
 </ion-header>
 
 <ion-content class="dashboard-content">
@@ -42,6 +51,15 @@
           <ion-icon name="calendar-outline" class="dashboard-nav-icon"></ion-icon>
           <span>Eventos</span>
         </button>
+        <button
+          type="button"
+          class="dashboard-nav-item"
+          [class.active]="activeTab === 'exportar'"
+          (click)="setTab('exportar')"
+        >
+          <ion-icon name="download-outline" class="dashboard-nav-icon"></ion-icon>
+          <span>Exportar Dados</span>
+        </button>
       </nav>
     </aside>
 
@@ -69,12 +87,12 @@
 
           <ion-card class="kpi-card">
             <ion-card-content class="kpi-card-content">
-              <div class="kpi-icon kpi-icon-success">
-                <ion-icon name="checkmark-done-outline"></ion-icon>
+              <div class="kpi-icon kpi-icon-alert">
+                <ion-icon name="alert-circle-outline"></ion-icon>
               </div>
               <div class="kpi-text">
-                <span class="kpi-label">Reconhecimento (hoje)</span>
-                <span class="kpi-value">{{ pontualidadePct }}%</span>
+                <span class="kpi-label">Não reconhecidos (7d)</span>
+                <span class="kpi-value">{{ naoRecCount }}</span>
               </div>
             </ion-card-content>
           </ion-card>
@@ -170,6 +188,42 @@
             </ion-card-content>
           </ion-card>
         </div>
+
+        <ion-card class="chart-card">
+          <ion-card-header class="chart-card-header">
+            <ion-card-title class="chart-card-title">Não reconhecidos</ion-card-title>
+            <span class="unrecognized-subtitle">Últimos 7 dias</span>
+          </ion-card-header>
+          <ion-card-content class="unrecognized-card-content">
+            <div class="bar-chart bar-chart-weekday unrecognized-chart">
+              <div class="bar-chart-bars">
+                <div *ngFor="let d of naoRecPorDia" class="bar-chart-bar-wrap">
+                  <span class="bar-chart-value">{{ d.count }}</span>
+                  <div
+                    class="bar-chart-bar bar-chart-bar-alert"
+                    [style.height.%]="(d.count / maxNaoRecPorDia) * 100"
+                    [attr.title]="d.dia + ': ' + d.count + ' não reconhecidos'"
+                  ></div>
+                  <span class="bar-chart-label">{{ d.dia }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="unrecognized-side">
+              <h4 class="unrecognized-side-title">Mais recentes</h4>
+              <ul class="unrecognized-list" *ngIf="ultimosNaoRec.length; else semUnknown">
+                <li *ngFor="let u of ultimosNaoRec" class="unrecognized-item">
+                  <span class="unrec-time">{{ formatUnknownTime(u.timestamp_ms) }}</span>
+                  <span class="unrec-distance">d={{ formatDistance(u.distance) }}</span>
+                  <span class="unrec-badge">desconhecido</span>
+                </li>
+              </ul>
+              <ng-template #semUnknown>
+                <p class="chart-empty">Nenhum evento desconhecido registrado.</p>
+              </ng-template>
+            </div>
+          </ion-card-content>
+        </ion-card>
       </section>
 
       <section *ngIf="activeTab === 'funcionarios'" class="dashboard-view">
@@ -278,6 +332,114 @@
               [disabled]="cadastroLoading || !cadastroNome.trim()"
             >
               {{ cadastroLoading ? 'Cadastrando...' : 'Cadastrar' }}
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
+      </section>
+
+      <section *ngIf="activeTab === 'exportar'" class="dashboard-view">
+        <header class="dashboard-page-header">
+          <h2 class="dashboard-title">Exportar Dados</h2>
+          <p class="dashboard-subtitle">
+            Baixe os últimos acessos bem-sucedidos em formato CSV.
+          </p>
+        </header>
+
+        <ion-card class="export-card">
+          <ion-card-content>
+            <ion-item lines="full" class="cadastro-field">
+              <ion-label position="stacked">Funcionários</ion-label>
+              <ion-select
+                interface="popover"
+                multiple="true"
+                placeholder="Todos os funcionários"
+                [(ngModel)]="exportSelectedEmployees"
+                [disabled]="exportLoading"
+              >
+                <ion-select-option *ngFor="let f of funcionarios" [value]="f.id">
+                  {{ f.nome }}
+                </ion-select-option>
+              </ion-select>
+            </ion-item>
+
+            <div class="export-employee-actions">
+              <ion-button
+                fill="outline"
+                size="small"
+                class="export-emp-btn"
+                (click)="exportSelectAllEmployees()"
+                [disabled]="exportLoading || !funcionarios.length"
+              >
+                Selecionar todos
+              </ion-button>
+              <ion-button
+                fill="clear"
+                size="small"
+                class="export-emp-btn"
+                (click)="exportClearEmployees()"
+                [disabled]="exportLoading || !exportSelectedEmployees.length"
+              >
+                Limpar seleção
+              </ion-button>
+              <span class="export-emp-count">
+                {{ exportSelectedEmployees.length
+                  ? exportSelectedEmployees.length + ' selecionado(s)'
+                  : 'Todos os funcionários' }}
+              </span>
+            </div>
+
+            <div class="export-row">
+              <ion-item lines="full" class="cadastro-field export-flex">
+                <ion-label position="stacked">Início do período (opcional)</ion-label>
+                <ion-input
+                  type="datetime-local"
+                  [(ngModel)]="exportFrom"
+                  [disabled]="exportLoading"
+                ></ion-input>
+              </ion-item>
+
+              <ion-item lines="full" class="cadastro-field export-flex">
+                <ion-label position="stacked">Fim do período (opcional)</ion-label>
+                <ion-input
+                  type="datetime-local"
+                  [(ngModel)]="exportTo"
+                  [disabled]="exportLoading"
+                ></ion-input>
+              </ion-item>
+            </div>
+
+            <ion-item lines="full" class="cadastro-field">
+              <ion-label position="stacked">Quantidade de eventos</ion-label>
+              <ion-select
+                interface="popover"
+                [(ngModel)]="exportLimit"
+                [disabled]="exportLoading"
+              >
+                <ion-select-option *ngFor="let n of exportLimitOptions" [value]="n">
+                  {{ n }} eventos
+                </ion-select-option>
+              </ion-select>
+            </ion-item>
+
+            <p *ngIf="exportError" class="cadastro-message cadastro-error">
+              {{ exportError }}
+            </p>
+            <p *ngIf="exportSuccess" class="cadastro-message cadastro-success">
+              {{ exportSuccess }}
+            </p>
+
+            <ion-button
+              expand="block"
+              class="cadastro-submit"
+              (click)="submitExport()"
+              [disabled]="exportLoading"
+            >
+              <ion-icon
+                *ngIf="!exportLoading"
+                name="download-outline"
+                slot="start"
+              ></ion-icon>
+              {{ exportLoading ? 'Exportando...' : 'Exportar CSV' }}
             </ion-button>
           </ion-card-content>
         </ion-card>
