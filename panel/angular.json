@@ -33,6 +33,16 @@
                 "glob": "**/*",
                 "input": "src/assets",
                 "output": "assets"
+              },
+              {
+                "glob": "*.wasm",
+                "input": "node_modules/onnxruntime-web/dist",
+                "output": "assets/ort"
+              },
+              {
+                "glob": "*.mjs",
+                "input": "node_modules/onnxruntime-web/dist",
+                "output": "assets/ort"
               }
             ],
             "styles": ["src/global.scss", "src/theme/variables.scss"],

@@ -19,6 +19,7 @@ import {
   IonSpinner,
   IonTitle,
   IonToolbar,
+  ModalController,
   ToastController,
 } from "@ionic/angular/standalone";
 import { addIcons } from "ionicons";
@@ -103,6 +104,9 @@ export class EnrollmentWizardComponent {
   private faces = inject(FaceEmbeddingService);
   private toast = inject(ToastController);
   private destroyRef = inject(DestroyRef);
+  // Optional: present, when the wizard is opened via ModalController.create().
+  // Null when the component is rendered as a route or embedded directly.
+  private modalCtrl = inject(ModalController, { optional: true });
 
   /** Locally cached so we can stop tracks on destroy. */
   private stream: MediaStream | null = null;
@@ -218,12 +222,14 @@ export class EnrollmentWizardComponent {
     this.stopStream();
     this.showToast(`${shots.length} capturas armazenadas.`, "success");
     this.completed.emit(shots.length);
+    this.modalCtrl?.dismiss({ status: "completed", count: shots.length });
   }
 
   /** Cancel button — close without uploading anything. */
   cancel(): void {
     this.stopStream();
     this.closed.emit();
+    this.modalCtrl?.dismiss({ status: "cancelled" });
   }
 
   private stopStream(): void {

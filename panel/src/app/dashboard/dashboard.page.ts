@@ -20,6 +20,7 @@ import {
   IonCardTitle,
   IonCardContent,
   IonLabel,
+  ModalController,
 } from '@ionic/angular/standalone';
 import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -28,6 +29,7 @@ import { EventCardComponent } from '../event-card/event-card.component';
 import { EmployeesService, Funcionario } from '../employees/employees.service';
 import { AnalyticsService, EventRow } from '../analytics/analytics.service';
 import { AuthService } from '../auth/auth.service';
+import { EnrollmentWizardComponent } from '../features/enrollment/enrollment-wizard.component';
 
 interface Evento {
   titulo: string;
@@ -120,6 +122,7 @@ export class DashboardPage implements OnInit {
   private analytics = inject(AnalyticsService);
   private auth = inject(AuthService);
   private router = inject(Router);
+  private modalCtrl = inject(ModalController);
 
   activeTab: DashboardTab = 'dashboard';
 
@@ -351,10 +354,10 @@ export class DashboardPage implements OnInit {
     this.employees.create({ nome, turno: this.cadastroTurno }).subscribe({
       next: (f) => {
         this.cadastroLoading = false;
-        this.cadastroSuccess = `Funcionário "${f.nome}" cadastrado com sucesso.`;
         this.cadastroNome = '';
         this.cadastroTurno = null;
         this.reloadFuncionarios();
+        this.openEnrollmentWizard(f);
       },
       error: (err: HttpErrorResponse) => {
         this.cadastroLoading = false;
@@ -367,6 +370,31 @@ export class DashboardPage implements OnInit {
         }
       },
     });
+  }
+
+  private async openEnrollmentWizard(employee: Funcionario): Promise<void> {
+    const modal = await this.modalCtrl.create({
+      component: EnrollmentWizardComponent,
+      componentProps: {
+        employeeId: employee.id,
+        employeeName: employee.nome,
+      },
+      backdropDismiss: false,
+    });
+
+    await modal.present();
+    const { data } = await modal.onDidDismiss<{
+      status: 'completed' | 'cancelled';
+      count?: number;
+    }>();
+
+    if (data?.status === 'completed') {
+      this.cadastroSuccess =
+        `Funcionário "${employee.nome}" cadastrado com ${data.count ?? 0} captura(s).`;
+    } else {
+      this.cadastroSuccess =
+        `Funcionário "${employee.nome}" cadastrado. Capture as fotos depois pela lista.`;
+    }
   }
 
   // ---------- Computações de distribuição por turno ----------
