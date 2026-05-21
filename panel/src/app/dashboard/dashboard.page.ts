@@ -1,7 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
 import {
   IonButton,
   IonContent,
@@ -24,17 +23,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
 import { EventCardComponent } from '../event-card/event-card.component';
 import { EmployeesService, Funcionario } from '../employees/employees.service';
-import { AnalyticsService } from '../analytics/analytics.service';
+import { AnalyticsService, EventRow } from '../analytics/analytics.service';
 
 interface Evento {
   titulo: string;
   descricao: string;
   data?: string;
   icone?: string;
-}
-
-interface EventosMock {
-  eventos: Evento[];
 }
 
 interface AcessoHoraItem {
@@ -75,6 +70,14 @@ const COR_TURNO_FALLBACK = '#9ca3af';
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+// Espelha o map shift→hora do backend ([analytics.rs:174-180](backend/src/routes/analytics.rs#L174-L180))
+// para que os cálculos por funcionário batam com o /analytics/avg-delay global.
+const SHIFT_START_HHMM: Record<string, [number, number]> = {
+  'Manhã': [8, 0],
+  'Tarde': [14, 0],
+  'Noite': [22, 0],
+};
+
 @Component({
   selector: 'app-dashboard',
   templateUrl: './dashboard.page.html',
@@ -104,7 +107,6 @@ const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   ],
 })
 export class DashboardPage implements OnInit {
-  private http = inject(HttpClient);
   private employees = inject(EmployeesService);
   private analytics = inject(AnalyticsService);
 
@@ -141,6 +143,20 @@ export class DashboardPage implements OnInit {
   cadastroLoading = false;
   cadastroError = '';
   cadastroSuccess = '';
+
+  // Foto de perfil
+  fotoPerfil = 'assets/Images/Profile_Placeholder.jpg';
+  fotoPerfilBase64: string | null = null;
+  fileInput: HTMLInputElement | null = null;
+
+  // Dashboard por funcionário (aba Funcionários, exibido só com selectedFuncionario)
+  funcPontualidadePct: number | null = null;
+  funcTotalAtrasos: number | null = null;
+  funcAtrasoMedioMin: number | null = null;
+  funcAcessosPorHora: AcessoHoraItem[] = [];
+  funcMaxAcessosHora = 0;
+  funcAcessosPorDiaSemana: AcessoDiaSemanaItem[] = [];
+  funcMaxAcessoDiaSemana = 0;
 
   ngOnInit(): void {
     this.reloadFuncionarios();
@@ -184,11 +200,20 @@ export class DashboardPage implements OnInit {
       this.maxAcessoDiaSemana = Math.max(1, ...byDay);
     });
 
-    this.http
-      .get<EventosMock>('assets/mock_data_jsons/eventos.json')
-      .subscribe((data) => {
-        this.eventos = data.eventos;
-      });
+    this.analytics.events({ limit: 20 }).subscribe({
+      next: (rows: EventRow[]) => {
+        this.eventos = rows.map((row) => ({
+          titulo: `${row.employee_name || 'Desconhecido'} - ${row.status === 'granted' ? 'Acesso Concedido' : 'Desconhecido'}`,
+          descricao: row.distance !== null ? `Distância: ${row.distance.toFixed(2)}m` : 'Sem distância',
+          data: new Date(row.timestamp_ms).toLocaleString('pt-BR'),
+          icone: row.status === 'granted' ? 'checkmark-circle-outline' : 'alert-circle-outline',
+        }));
+      },
+      error: (err) => {
+        console.error('Erro ao carregar eventos:', err);
+        this.eventos = [];
+      },
+    });
   }
 
   setTab(tab: DashboardTab): void {
@@ -312,6 +337,7 @@ export class DashboardPage implements OnInit {
       this.selectedFuncionario.turno !== this.selectedTurno
     ) {
       this.selectedFuncionario = null;
+      this.clearFuncionarioDashboard();
     }
     this.filtrarFuncionarios();
   }
@@ -320,5 +346,135 @@ export class DashboardPage implements OnInit {
     this.selectedFuncionario = f;
     this.searchTerm = '';
     this.funcionariosFiltrados = [];
+    this.loadFuncionarioDashboard(f);
+  }
+
+  private clearFuncionarioDashboard(): void {
+    this.funcPontualidadePct = null;
+    this.funcTotalAtrasos = null;
+    this.funcAtrasoMedioMin = null;
+    this.funcAcessosPorHora = [];
+    this.funcMaxAcessosHora = 0;
+    this.funcAcessosPorDiaSemana = [];
+    this.funcMaxAcessoDiaSemana = 0;
+  }
+
+  private loadFuncionarioDashboard(f: Funcionario): void {
+    this.clearFuncionarioDashboard();
+    this.analytics
+      .events({ employee_id: f.id, status: 'granted', limit: 200 })
+      .subscribe((rows: EventRow[]) => {
+        // Bloqueia race condition se o usuário trocar de funcionário antes da resposta chegar.
+        if (this.selectedFuncionario?.id !== f.id) return;
+        this.computeFuncionarioCharts(rows);
+        this.computeFuncionarioKpis(rows, f);
+      });
+  }
+
+  private computeFuncionarioCharts(rows: EventRow[]): void {
+    const hourly = new Array<number>(24).fill(0);
+    const dow = new Array<number>(7).fill(0);
+    for (const ev of rows) {
+      const d = new Date(ev.timestamp_ms);
+      const h = d.getHours();
+      const w = d.getDay();
+      if (h >= 0 && h < 24) hourly[h]++;
+      if (w >= 0 && w < 7) dow[w]++;
+    }
+    this.funcAcessosPorHora = hourly.map((count, hour) => ({
+      label: `${hour.toString().padStart(2, '0')}h`,
+      count,
+    }));
+    this.funcMaxAcessosHora = Math.max(1, ...hourly);
+    this.funcAcessosPorDiaSemana = DIAS_SEMANA.map((dia, i) => ({
+      dia,
+      count: dow[i],
+    }));
+    this.funcMaxAcessoDiaSemana = Math.max(1, ...dow);
+  }
+
+  private computeFuncionarioKpis(rows: EventRow[], f: Funcionario): void {
+    const shiftStart = SHIFT_START_HHMM[f.turno];
+    if (!shiftStart) {
+      // Sem turno definido não há referência para calcular atraso.
+      this.funcPontualidadePct = null;
+      this.funcTotalAtrasos = null;
+      this.funcAtrasoMedioMin = null;
+      return;
+    }
+
+    // Primeiro evento de cada dia (chave = data local YYYY-MM-DD).
+    const firstPerDay = new Map<string, number>();
+    for (const ev of rows) {
+      const d = new Date(ev.timestamp_ms);
+      const key =
+        `${d.getFullYear()}-` +
+        `${(d.getMonth() + 1).toString().padStart(2, '0')}-` +
+        `${d.getDate().toString().padStart(2, '0')}`;
+      const cur = firstPerDay.get(key);
+      if (cur === undefined || ev.timestamp_ms < cur) {
+        firstPerDay.set(key, ev.timestamp_ms);
+      }
+    }
+
+    if (firstPerDay.size === 0) {
+      this.funcPontualidadePct = 0;
+      this.funcTotalAtrasos = 0;
+      this.funcAtrasoMedioMin = 0;
+      return;
+    }
+
+    const shiftMinutes = shiftStart[0] * 60 + shiftStart[1];
+    const delays: number[] = [];
+    for (const firstMs of firstPerDay.values()) {
+      const d = new Date(firstMs);
+      const minutesIntoDay = d.getHours() * 60 + d.getMinutes();
+      delays.push(minutesIntoDay - shiftMinutes);
+    }
+
+    const lateDays = delays.filter((m) => m > TOLERANCIA_ATRASO_MIN).length;
+    const avg = delays.reduce((a, b) => a + b, 0) / delays.length;
+
+    this.funcTotalAtrasos = lateDays;
+    this.funcAtrasoMedioMin = Math.round(avg * 10) / 10;
+    this.funcPontualidadePct = Math.round(
+      ((delays.length - lateDays) / delays.length) * 100,
+    );
+  }
+
+  // ---------- Foto de Perfil ----------
+
+  escolherFoto(): void {
+    if (!this.fileInput) {
+      this.fileInput = document.createElement('input');
+      this.fileInput.type = 'file';
+      this.fileInput.accept = 'image/*';
+      this.fileInput.style.display = 'none';
+      this.fileInput.addEventListener('change', (event) => this.procesarArquivoFoto(event));
+      document.body.appendChild(this.fileInput);
+    }
+    this.fileInput.click();
+  }
+
+  private procesarArquivoFoto(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (result) {
+        this.fotoPerfil = result;
+        // Extrair base64 sem o prefixo data:image/...;base64,
+        const base64 = result.split(',')[1];
+        this.fotoPerfilBase64 = base64;
+      }
+    };
+    reader.readAsDataURL(file);
+    
+    // Limpar o valor do input para permitir selecionar o mesmo arquivo novamente
+    input.value = '';
   }
 }
