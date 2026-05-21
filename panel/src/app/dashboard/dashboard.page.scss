@@ -248,6 +248,32 @@
   flex: 1;
 }
 
+.dashboard-funcionarios-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+
+  app-employee-card {
+    flex: 1 1 320px;
+  }
+}
+
+.dashboard-funcionarios-remove {
+  --border-radius: 10px;
+  --border-color: rgba(220, 38, 38, 0.5);
+  --color: #b91c1c;
+  --color-hover: #ffffff;
+  --background-hover: #dc2626;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  height: 42px;
+  align-self: flex-start;
+  margin: 4px 0 0;
+}
+
 .dashboard-funcionarios-count {
   margin: 20px 0 8px;
   color: var(--text-muted);

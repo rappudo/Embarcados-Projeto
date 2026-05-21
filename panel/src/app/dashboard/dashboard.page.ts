@@ -20,27 +20,16 @@ import {
   IonCardTitle,
   IonCardContent,
   IonLabel,
+  AlertController,
   ModalController,
 } from '@ionic/angular/standalone';
 import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
-import { EventCardComponent } from '../event-card/event-card.component';
 import { EmployeesService, Funcionario } from '../employees/employees.service';
 import { AnalyticsService, EventRow } from '../analytics/analytics.service';
 import { AuthService } from '../auth/auth.service';
 import { EnrollmentWizardComponent } from '../features/enrollment/enrollment-wizard.component';
-
-interface Evento {
-  titulo: string;
-  descricao: string;
-  data?: string;
-  icone?: string;
-}
-
-interface EventosMock {
-  eventos: Evento[];
-}
 
 interface AcessoHoraItem {
   label: string;
@@ -70,7 +59,6 @@ type DashboardTab =
   | 'dashboard'
   | 'funcionarios'
   | 'cadastro'
-  | 'eventos'
   | 'exportar';
 
 const EXPORT_PAGE_SIZE = 200;
@@ -113,7 +101,6 @@ const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     IonCardContent,
     IonLabel,
     EmployeeCardComponent,
-    EventCardComponent,
   ],
 })
 export class DashboardPage implements OnInit {
@@ -123,6 +110,7 @@ export class DashboardPage implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   private modalCtrl = inject(ModalController);
+  private alertCtrl = inject(AlertController);
 
   activeTab: DashboardTab = 'dashboard';
 
@@ -153,8 +141,6 @@ export class DashboardPage implements OnInit {
 
   acessosPorDiaSemana: AcessoDiaSemanaItem[] = [];
   maxAcessoDiaSemana = 0;
-
-  eventos: Evento[] = [];
 
   // Form de cadastro de funcionário
   cadastroNome = '';
@@ -211,12 +197,6 @@ export class DashboardPage implements OnInit {
       }));
       this.maxAcessoDiaSemana = Math.max(1, ...byDay);
     });
-
-    this.http
-      .get<EventosMock>('assets/mock_data_jsons/eventos.json')
-      .subscribe((data) => {
-        this.eventos = data.eventos;
-      });
   }
 
   setTab(tab: DashboardTab): void {
@@ -477,6 +457,44 @@ export class DashboardPage implements OnInit {
     this.selectedFuncionario = f;
     this.searchTerm = '';
     this.filtrarFuncionarios();
+  }
+
+  async confirmarRemocaoFuncionario(): Promise<void> {
+    if (!this.selectedFuncionario) return;
+    const target = this.selectedFuncionario;
+
+    const alert = await this.alertCtrl.create({
+      header: 'Remover funcionário',
+      message: `Tem certeza que deseja remover <strong>${target.nome}</strong>? Esta ação não pode ser desfeita e apaga também os embeddings faciais cadastrados.`,
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Remover',
+          role: 'destructive',
+          handler: () => this.removerFuncionario(target),
+        },
+      ],
+    });
+    await alert.present();
+  }
+
+  private removerFuncionario(f: Funcionario): void {
+    this.employees.delete(f.id).subscribe({
+      next: () => {
+        if (this.selectedFuncionario?.id === f.id) {
+          this.selectedFuncionario = null;
+        }
+        this.reloadFuncionarios();
+      },
+      error: async () => {
+        const alert = await this.alertCtrl.create({
+          header: 'Erro ao remover',
+          message: 'Não foi possível remover o funcionário. Tente novamente.',
+          buttons: ['OK'],
+        });
+        await alert.present();
+      },
+    });
   }
 
   // ---------- Aba Exportar ----------

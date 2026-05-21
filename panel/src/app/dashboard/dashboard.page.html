@@ -45,15 +45,6 @@
         <button
           type="button"
           class="dashboard-nav-item"
-          [class.active]="activeTab === 'eventos'"
-          (click)="setTab('eventos')"
-        >
-          <ion-icon name="calendar-outline" class="dashboard-nav-icon"></ion-icon>
-          <span>Eventos</span>
-        </button>
-        <button
-          type="button"
-          class="dashboard-nav-item"
           [class.active]="activeTab === 'exportar'"
           (click)="setTab('exportar')"
         >
@@ -256,12 +247,23 @@
           ></ion-searchbar>
         </div>
 
-        <app-employee-card
-          *ngIf="selectedFuncionario"
-          [nome]="selectedFuncionario.nome"
-          [idade]="selectedFuncionario.idade"
-          [dataIngresso]="selectedFuncionario.dataIngresso"
-        ></app-employee-card>
+        <div *ngIf="selectedFuncionario" class="dashboard-funcionarios-detail">
+          <app-employee-card
+            [nome]="selectedFuncionario.nome"
+            [idade]="selectedFuncionario.idade"
+            [dataIngresso]="selectedFuncionario.dataIngresso"
+          ></app-employee-card>
+
+          <ion-button
+            class="dashboard-funcionarios-remove"
+            color="danger"
+            fill="outline"
+            (click)="confirmarRemocaoFuncionario()"
+          >
+            <ion-icon name="trash-outline" slot="start"></ion-icon>
+            Remover funcionário
+          </ion-button>
+        </div>
 
         <p class="dashboard-funcionarios-count" *ngIf="funcionariosFiltrados.length > 0">
           {{ funcionariosFiltrados.length }} de {{ funcionarios.length }}
@@ -460,24 +462,6 @@
         </ion-card>
       </section>
 
-      <section *ngIf="activeTab === 'eventos'" class="dashboard-view">
-        <header class="dashboard-page-header">
-          <h2 class="dashboard-title">Eventos</h2>
-          <p class="dashboard-subtitle">
-            Últimas atividades e alertas registrados pelo sistema.
-          </p>
-        </header>
-
-        <div class="dashboard-events">
-          <app-event-card
-            *ngFor="let ev of eventos"
-            [titulo]="ev.titulo"
-            [descricao]="ev.descricao"
-            [data]="ev.data"
-            [icone]="ev.icone ?? 'calendar-outline'"
-          ></app-event-card>
-        </div>
-      </section>
     </main>
   </div>
 </ion-content>
