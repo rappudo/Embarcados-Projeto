@@ -39,6 +39,10 @@ edge/*.exe
 *.pt
 *.pb
 edge/config/config.toml
+
+# Local-only presentation TODOs (dated planning notes — not durable repo docs)
+TODO-Apresentacao-*.md
+
 .vscode/
 .idea/
 *.swp
