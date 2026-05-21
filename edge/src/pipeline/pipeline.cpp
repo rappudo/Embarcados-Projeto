@@ -1,14 +1,17 @@
 #include "pipeline/pipeline.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include "hardware/camera.hpp"
 #include "hardware/turnstile.hpp"
 #include "hardware/buzzer.hpp"
+#include "hardware/rgb_led.hpp"
 #include "vision/face_detector.hpp"
 #include "vision/face_embedder.hpp"
 #include "vision/matcher.hpp"
@@ -26,12 +29,15 @@ Pipeline::Pipeline(
     facegate::vision::Matcher& matcher,
     facegate::hardware::Turnstile& turnstile,
     facegate::hardware::Buzzer& buzzer,
+    facegate::hardware::RgbLed& led,
     facegate::storage::Storage& storage,
     facegate::mqtt::MqttPublisher& publisher,
     std::string device_id,
     int heartbeat_interval_seconds,
     int idle_reset_seconds,
-    int unknown_throttle_seconds
+    int unknown_throttle_seconds,
+    int open_hold_ms,
+    int denied_cooldown_ms
 )
     : camera_(camera),
       detector_(detector),
@@ -39,12 +45,15 @@ Pipeline::Pipeline(
       matcher_(matcher),
       turnstile_(turnstile),
       buzzer_(buzzer),
+      led_(led),
       storage_(storage),
       publisher_(publisher),
       device_id_(std::move(device_id)),
       heartbeat_interval_seconds_(heartbeat_interval_seconds),
       idle_reset_(idle_reset_seconds),
-      unknown_throttle_(unknown_throttle_seconds) {
+      unknown_throttle_(unknown_throttle_seconds),
+      open_hold_(open_hold_ms),
+      denied_cooldown_(denied_cooldown_ms) {
     try {
         main_thread_ = std::thread(&Pipeline::main_loop, this);
         auxiliary_thread_ = std::thread(&Pipeline::auxiliary_loop, this);
@@ -115,7 +124,21 @@ void Pipeline::main_loop() {
     steady::time_point last_unknown_emitted_at{};
     bool ever_seen_face = false;
 
+    // While we're inside the granted-open window or the denied cooldown, the
+    // hardware (servo + LED) owns the moment — skip detection entirely so a
+    // second face can't re-trigger anything until the window closes.
+    steady::time_point block_until{};
+
     while (!stop_.load()) {
+        const auto loop_start = steady::now();
+        if (loop_start < block_until) {
+            const auto remaining = block_until - loop_start;
+            const auto step = std::min<std::chrono::nanoseconds>(
+                remaining, std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(step);
+            continue;
+        }
+
         auto frame_opt = camera_.capture();
         if (!frame_opt) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -179,9 +202,13 @@ void Pipeline::main_loop() {
                 should_emit = true;
                 std::cerr << "Pipeline: MATCH employee=" << match_result->employee
                           << " distance=" << match_result->distance << "\n";
-                // Non-blocking — turnstile thread handles the 5s open + close.
-                // Re-triggering during the open window just extends it.
+                // Non-blocking — turnstile thread handles the open + close,
+                // LED worker holds green until the window expires. Gating the
+                // loop here is what guarantees no second face is processed
+                // during this window.
                 turnstile_.grant_access();
+                led_.show_granted(static_cast<int>(open_hold_.count()));
+                block_until = steady::now() + open_hold_;
                 last_status = facegate::domain::AccessStatus::Granted;
                 last_employee = match_result->employee;
             }
@@ -203,6 +230,11 @@ void Pipeline::main_loop() {
             if (was_not_unknown || throttle_expired) {
                 should_emit = true;
                 std::cerr << "Pipeline: no match (rejected by threshold)\n";
+                // Arm the LED + gate BEFORE the (blocking) buzzer so that
+                // the red window is measured from when the unknown was
+                // decided, not from when the beep ends.
+                led_.show_denied(static_cast<int>(denied_cooldown_.count()));
+                block_until = steady::now() + denied_cooldown_;
                 buzzer_.beep_denied();
                 last_status = facegate::domain::AccessStatus::Unknown;
                 last_employee.reset();

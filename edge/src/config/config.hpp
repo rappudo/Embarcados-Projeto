@@ -24,6 +24,10 @@ struct GpioConfig {
     bool enabled;
     int servo_pin;
     int buzzer_pin;
+    int rgb_red_pin;
+    int rgb_green_pin;
+    int rgb_blue_pin;
+    bool rgb_active_high;
     int servo_open_ms;
     int buzzer_beep_ms;
 };
@@ -31,6 +35,7 @@ struct GpioConfig {
 struct RecognitionConfig {
     int idle_reset_seconds;
     int unknown_throttle_seconds;
+    int denied_cooldown_ms;
 };
 
 struct StorageConfig {

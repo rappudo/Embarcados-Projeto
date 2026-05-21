@@ -42,6 +42,7 @@ add_library(facegate_hardware STATIC
     src/hardware/turnstile.cpp
     src/hardware/buzzer.cpp
     src/hardware/camera.cpp
+    src/hardware/rgb_led.cpp
 )
 target_include_directories(facegate_hardware
     PUBLIC ${OpenCV_INCLUDE_DIRS} ${GPIOD_INCLUDE_DIRS}

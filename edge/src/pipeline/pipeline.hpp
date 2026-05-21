@@ -7,7 +7,9 @@
 #include <string>
 #include <thread>
 
-namespace facegate::hardware { class Camera; class Turnstile; class Buzzer; }
+namespace facegate::hardware {
+class Camera; class Turnstile; class Buzzer; class RgbLed;
+}
 namespace facegate::vision   { class FaceDetector; class FaceEmbedder; class Matcher; }
 namespace facegate::storage  { class Storage; }
 namespace facegate::mqtt     { class MqttPublisher; }
@@ -23,12 +25,15 @@ public:
         facegate::vision::Matcher& matcher,
         facegate::hardware::Turnstile& turnstile,
         facegate::hardware::Buzzer& buzzer,
+        facegate::hardware::RgbLed& led,
         facegate::storage::Storage& storage,
         facegate::mqtt::MqttPublisher& publisher,
         std::string device_id,
         int heartbeat_interval_seconds,
         int idle_reset_seconds,
-        int unknown_throttle_seconds
+        int unknown_throttle_seconds,
+        int open_hold_ms,
+        int denied_cooldown_ms
     );
     ~Pipeline();
 
@@ -50,6 +55,7 @@ private:
     facegate::vision::Matcher& matcher_;
     facegate::hardware::Turnstile& turnstile_;
     facegate::hardware::Buzzer& buzzer_;
+    facegate::hardware::RgbLed& led_;
     facegate::storage::Storage& storage_;
     facegate::mqtt::MqttPublisher& publisher_;
 
@@ -57,6 +63,8 @@ private:
     int heartbeat_interval_seconds_;
     std::chrono::seconds idle_reset_;
     std::chrono::seconds unknown_throttle_;
+    std::chrono::milliseconds open_hold_;
+    std::chrono::milliseconds denied_cooldown_;
 
     std::atomic<bool> stop_{false};
     std::mutex stop_mutex_;

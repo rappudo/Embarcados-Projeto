@@ -2,6 +2,7 @@
 
 #include <toml++/toml.hpp>
 
+#include <iterator>
 #include <stdexcept>
 #include <string>
 
@@ -58,6 +59,10 @@ GpioConfig parse_gpio(const toml::table& root) {
     cfg.enabled = (*section)["enabled"].value_or(true);
     cfg.servo_pin = (*section)["servo_pin"].value_or(-1);
     cfg.buzzer_pin = (*section)["buzzer_pin"].value_or(-1);
+    cfg.rgb_red_pin = (*section)["rgb_red_pin"].value_or(-1);
+    cfg.rgb_green_pin = (*section)["rgb_green_pin"].value_or(-1);
+    cfg.rgb_blue_pin = (*section)["rgb_blue_pin"].value_or(-1);
+    cfg.rgb_active_high = (*section)["rgb_active_high"].value_or(true);
     cfg.servo_open_ms = (*section)["servo_open_ms"].value_or(5000);
     cfg.buzzer_beep_ms = (*section)["buzzer_beep_ms"].value_or(300);
     return cfg;
@@ -71,9 +76,12 @@ RecognitionConfig parse_recognition(const toml::table& root) {
         cfg.idle_reset_seconds = (*section)["idle_reset_seconds"].value_or(3);
         cfg.unknown_throttle_seconds =
             (*section)["unknown_throttle_seconds"].value_or(10);
+        cfg.denied_cooldown_ms =
+            (*section)["denied_cooldown_ms"].value_or(1000);
     } else {
         cfg.idle_reset_seconds = 3;
         cfg.unknown_throttle_seconds = 10;
+        cfg.denied_cooldown_ms = 1000;
     }
     return cfg;
 }
@@ -150,8 +158,28 @@ void validate(const Config& cfg) {
             if (cfg.gpio.buzzer_pin < 0) {
                 throw std::runtime_error("Config: gpio.buzzer_pin is required (positive integer)");
             }
-            if (cfg.gpio.servo_pin == cfg.gpio.buzzer_pin) {
-                throw std::runtime_error("Config: gpio.servo_pin and gpio.buzzer_pin must differ");
+            if (cfg.gpio.rgb_red_pin < 0 ||
+                cfg.gpio.rgb_green_pin < 0 ||
+                cfg.gpio.rgb_blue_pin < 0) {
+                throw std::runtime_error(
+                    "Config: gpio.rgb_red_pin/rgb_green_pin/rgb_blue_pin are required (positive integers)"
+                );
+            }
+            const int pins[] = {
+                cfg.gpio.servo_pin,
+                cfg.gpio.buzzer_pin,
+                cfg.gpio.rgb_red_pin,
+                cfg.gpio.rgb_green_pin,
+                cfg.gpio.rgb_blue_pin,
+            };
+            for (size_t i = 0; i < std::size(pins); ++i) {
+                for (size_t j = i + 1; j < std::size(pins); ++j) {
+                    if (pins[i] == pins[j]) {
+                        throw std::runtime_error(
+                            "Config: gpio pin assignments must all differ"
+                        );
+                    }
+                }
             }
             if (cfg.gpio.servo_open_ms <= 0 || cfg.gpio.buzzer_beep_ms <= 0) {
                 throw std::runtime_error("Config: gpio servo/buzzer durations must be positive");
@@ -163,6 +191,9 @@ void validate(const Config& cfg) {
     }
     if (cfg.recognition.unknown_throttle_seconds <= 0) {
         throw std::runtime_error("Config: recognition.unknown_throttle_seconds must be positive");
+    }
+    if (cfg.recognition.denied_cooldown_ms <= 0) {
+        throw std::runtime_error("Config: recognition.denied_cooldown_ms must be positive");
     }
 
     if (cfg.storage.sqlite_path.empty()) {

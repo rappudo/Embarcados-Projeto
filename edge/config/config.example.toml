@@ -45,13 +45,24 @@ fps = 30
 servo_pin = 17
 buzzer_pin = 27
 
+# LED RGB de status. Verde durante a janela de acesso concedido, vermelho
+# durante o cooldown de acesso negado. Cada canal precisa de resistor
+# limitador de corrente (~220-330Ω).
+rgb_red_pin = 22
+rgb_green_pin = 23
+rgb_blue_pin = 24
+
+# Cátodo comum → true  (HIGH acende; pino longo no GND).
+# Ânodo comum  → false (LOW acende;  pino longo no 3.3V).
+rgb_active_high = true
+
 # Quanto tempo a catraca permanece aberta após um acesso concedido, em ms.
 # Re-acionamentos durante esta janela estendem o tempo aberto — nunca reiniciam
 # o ciclo abre/fecha, o que seria destrutivo para o servo em 30 fps.
 servo_open_ms = 5000
 
 # Duração do beep do buzzer em acesso negado/desconhecido, em milissegundos.
-buzzer_beep_ms = 300
+buzzer_beep_ms = 400
 
 # -----------------------------------------------------------------------------
 # Reconhecimento — deduplicação de notificações
@@ -70,6 +81,11 @@ idle_reset_seconds = 3
 # à frente da câmera, publicamos no máximo um evento a cada N segundos. A
 # primeira aparição é sempre emitida imediatamente.
 unknown_throttle_seconds = 10
+
+# Após detectar um rosto não reconhecido, o reconhecimento pausa por este
+# tempo. O LED vermelho fica aceso durante a mesma janela e o buzzer beepa
+# dentro dela.
+denied_cooldown_ms = 1000
 
 # -----------------------------------------------------------------------------
 # Armazenamento local

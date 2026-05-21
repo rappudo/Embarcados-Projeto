@@ -14,6 +14,7 @@
 #include "hardware/camera.hpp"
 #include "hardware/turnstile.hpp"
 #include "hardware/buzzer.hpp"
+#include "hardware/rgb_led.hpp"
 #include "mqtt/mqtt_publisher.hpp"
 #include "mqtt/mqtt_subscriber.hpp"
 #include "pipeline/pipeline.hpp"
@@ -109,6 +110,14 @@ int main(int argc, char** argv) {
             cfg.gpio.buzzer_beep_ms,
             cfg.gpio.enabled
         );
+        facegate::hardware::RgbLed led(
+            kGpioChipPath,
+            cfg.gpio.rgb_red_pin,
+            cfg.gpio.rgb_green_pin,
+            cfg.gpio.rgb_blue_pin,
+            cfg.gpio.enabled,
+            cfg.gpio.rgb_active_high
+        );
 
         std::cerr << "facegate: loading vision models\n";
         facegate::vision::FaceDetector detector(
@@ -161,12 +170,15 @@ int main(int argc, char** argv) {
             matcher,
             turnstile,
             buzzer,
+            led,
             storage,
             publisher,
             cfg.device_id,
             cfg.mqtt.heartbeat_interval_seconds,
             cfg.recognition.idle_reset_seconds,
-            cfg.recognition.unknown_throttle_seconds
+            cfg.recognition.unknown_throttle_seconds,
+            cfg.gpio.servo_open_ms,
+            cfg.recognition.denied_cooldown_ms
         );
 
         while (!g_stop_requested.load()) {
