@@ -21,6 +21,7 @@ import {
   IonCardContent,
   IonLabel,
   AlertController,
+  IonicSafeString,
   ModalController,
 } from '@ionic/angular/standalone';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -75,6 +76,18 @@ const TURNO_CORES: Record<string, string> = {
 const COR_TURNO_FALLBACK = '#9ca3af';
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c] ?? c);
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -463,9 +476,17 @@ export class DashboardPage implements OnInit {
     if (!this.selectedFuncionario) return;
     const target = this.selectedFuncionario;
 
+    // AlertController escapes plain strings. To render the bold name we
+    // need IonicSafeString — and to use it safely we escape the name
+    // (admin-typed, but still data-derived) before interpolation.
+    const safeName = escapeHtml(target.nome);
     const alert = await this.alertCtrl.create({
       header: 'Remover funcionário',
-      message: `Tem certeza que deseja remover <strong>${target.nome}</strong>? Esta ação não pode ser desfeita e apaga também os embeddings faciais cadastrados.`,
+      message: new IonicSafeString(
+        `Tem certeza que deseja remover <strong>${safeName}</strong>? ` +
+          `Esta ação não pode ser desfeita e apaga também os embeddings ` +
+          `faciais cadastrados.`,
+      ),
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
         {
