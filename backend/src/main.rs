@@ -1,6 +1,6 @@
 use anyhow::Result;
-use axum::http::{HeaderValue, Method};
-use tower_http::cors::{Any, CorsLayer};
+use axum::http::{HeaderName, HeaderValue, Method, header};
+use tower_http::cors::CorsLayer;
 use tracing::info;
 
 mod config;
@@ -48,7 +48,17 @@ async fn main() -> Result<()> {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers(Any);
+        // Explicit list, not `Any`. Per the CORS spec, the wildcard `*` in
+        // Access-Control-Allow-Headers does NOT cover Authorization — it has
+        // to be named. Firefox already warns about this in DevTools and
+        // intends to enforce it soon, which would break every authenticated
+        // request from the panel.
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            header::ACCEPT,
+            HeaderName::from_static("x-requested-with"),
+        ]);
 
     // pool is moved into the router here — fine, no further uses.
     let app =

@@ -2,9 +2,10 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  EventEmitter,
+  Input,
+  Output,
   inject,
-  input,
-  output,
   signal,
   viewChild,
 } from "@angular/core";
@@ -68,15 +69,20 @@ interface Shot {
   ],
 })
 export class EnrollmentWizardComponent {
+  // Plain @Input + EventEmitter (not signal inputs) so Ionic's
+  // ModalController.componentProps assignment works. componentProps
+  // sets properties directly on the instance, bypassing Angular's
+  // input system — assigning to a signal-input getter would
+  // overwrite the function and break template reads.
   /** Employee that the captured embeddings will be associated with. */
-  readonly employeeId = input.required<number>();
+  @Input({ required: true }) employeeId!: number;
   /** Name to show in the header. Falls back to the id if absent. */
-  readonly employeeName = input<string>("");
+  @Input() employeeName = "";
 
   /** Emitted when the user dismisses (cancel button). */
-  readonly closed = output<void>();
+  @Output() closed = new EventEmitter<void>();
   /** Emitted on successful completion with the count of stored captures. */
-  readonly completed = output<number>();
+  @Output() completed = new EventEmitter<number>();
 
   /** Minimum captures before "Concluir" enables. */
   static readonly MIN_CAPTURES = 3;
@@ -203,7 +209,7 @@ export class EnrollmentWizardComponent {
     for (const shot of shots) {
       try {
         await new Promise<void>((resolve, reject) => {
-          this.enrollment.enrollVector(this.employeeId(), shot.embedding).subscribe({
+          this.enrollment.enrollVector(this.employeeId, shot.embedding).subscribe({
             next: () => {
               this.uploadProgress.update((n) => n + 1);
               resolve();
