@@ -1,5 +1,7 @@
 # FaceGateway
 
+[![CI](https://github.com/rappudo/Embarcados-Projeto/actions/workflows/ci.yml/badge.svg)](https://github.com/rappudo/Embarcados-Projeto/actions/workflows/ci.yml)
+
 > Sistema de controle de acesso por reconhecimento facial com processamento embarcado, fim a fim — do Raspberry Pi ao painel web/mobile.
 
 Reconhecimento roda **on-device**: a imagem facial nunca atravessa a rede. O edge (Raspberry Pi 4) extrai um embedding de 512 dimensões com ArcFace, compara localmente contra um cache SQLite e aciona a catraca. Eventos vão para um broker MQTT, que um backend Rust persiste em PostgreSQL+pgvector; um painel Ionic/Angular consome a API REST para gestão e analytics. A pilha inteira opera offline-resiliente: se a rede cair, o edge enfileira eventos e drena ao reconectar.

@@ -65,6 +65,17 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # llvm-tools-preview is what cargo-llvm-cov uses under the
+          # hood — installing it as a toolchain component is faster than
+          # letting cargo-llvm-cov pull a separate copy.
+          components: llvm-tools-preview
+
+      # Prebuilt cargo-llvm-cov binary — `cargo install` would compile
+      # from source (~5 min). taiki-e/install-action grabs the release
+      # archive in seconds.
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
       # Cache cargo's registry index, downloaded crate sources, and the
       # backend's target/ directory. Keyed on Cargo.lock so any dep bump
@@ -82,12 +93,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      # --locked: fail CI if Cargo.lock would need to change. Catches
-      # accidentally-committed Cargo.toml updates without a lock refresh.
-      # --test-threads=1: required by the test helper (tests share a
-      # single test database; reset_db() would race under parallel).
-      - name: Run tests
-        run: cargo test --locked -- --test-threads=1
+      # `cargo llvm-cov` runs the test suite under LLVM source-based
+      # coverage instrumentation and emits both a summary table on
+      # stdout and the requested lcov file. The flags after `--` are
+      # forwarded to the test binaries:
+      #   --test-threads=1: required by the test helper (tests share a
+      #     single facegate_test DB; reset_db() would race under parallel).
+      # `--locked` still applies to the build phase, catching accidental
+      # Cargo.toml drift just like the previous bare `cargo test`.
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov --locked --lcov --output-path coverage.lcov \
+            -- --test-threads=1
+
+      - name: Coverage summary
+        run: cargo llvm-cov report --summary-only
+
+      - name: Upload lcov report
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.lcov
+          if-no-files-found: error
 
   # ===========================================================================
   # Panel (Angular 20 + Ionic 8 + Jasmine/Karma)
@@ -124,8 +151,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test -- --watch=false --browsers=ChromeHeadlessCI
+      # --code-coverage triggers karma-coverage (already in devDependencies
+      # and wired in karma.conf.js with a text-summary + html reporter).
+      # Output goes to panel/coverage/app/. The text-summary lines appear
+      # in stdout, so the percentages show up directly in the CI log.
+      - name: Run tests with coverage
+        run: npm test -- --watch=false --browsers=ChromeHeadlessCI --code-coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: panel-coverage
+          path: panel/coverage/app
+          if-no-files-found: error
 
   # ===========================================================================
   # Edge (C++17 + OpenCV + ONNXRuntime + libgpiod + Mosquitto + SQLiteCpp)
@@ -164,7 +202,8 @@ jobs:
             base-devel cmake pkgconf \
             opencv onnxruntime-cpu \
             libgpiod mosquitto sqlite \
-            nlohmann-json tomlplusplus gtest
+            nlohmann-json tomlplusplus gtest \
+            lcov
 
       # SQLiteCpp is a thin C++ wrapper around libsqlite3. Arch ships it
       # only via AUR, which would require bootstrapping an AUR helper in
@@ -187,8 +226,17 @@ jobs:
           cmake --build /tmp/SQLiteCpp/build -j$(nproc)
           cmake --install /tmp/SQLiteCpp/build
 
+      # Coverage instrumentation: --coverage compiles with -fprofile-arcs
+      # -ftest-coverage and links libgcov, producing .gcno (compile-time)
+      # and .gcda (run-time) files that lcov reads. -O0 avoids the
+      # optimizer collapsing branches we'd otherwise be counting.
       - name: Configure
-        run: cmake -S edge -B edge/build -DBUILD_TESTING=ON
+        run: |
+          cmake -S edge -B edge/build \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-O0 --coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
 
       - name: Build
         run: cmake --build edge/build -j$(nproc)
@@ -198,3 +246,29 @@ jobs:
       # and have to re-run locally to triage.
       - name: Test
         run: ctest --test-dir edge/build --output-on-failure
+
+      # Collect coverage from the .gcda files the test run produced.
+      # --no-external skips system headers so the report only counts
+      # facegate code. --ignore-errors keeps lcov from aborting on
+      # mismatched-version warnings between gcc + lcov.
+      - name: Collect coverage
+        run: |
+          lcov --capture --directory edge/build --output-file edge/coverage.info \
+            --no-external --ignore-errors mismatch,inconsistent,unused
+          # Filter out test sources — we want coverage of production code,
+          # not of the test files themselves.
+          lcov --remove edge/coverage.info '*/tests/*' '*/gtest*' \
+            --output-file edge/coverage.info \
+            --ignore-errors unused
+          lcov --summary edge/coverage.info
+          genhtml edge/coverage.info --output-directory edge/coverage-html \
+            --ignore-errors inconsistent,corrupt
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-coverage
+          path: |
+            edge/coverage.info
+            edge/coverage-html
+          if-no-files-found: error
