@@ -83,10 +83,10 @@ pub async fn create(
     .fetch_one(&state.pool)
     .await
     .map_err(|e| {
-        if let Some(db_err) = e.as_database_error() {
-            if db_err.is_unique_violation() {
-                return (StatusCode::CONFLICT, "email already registered");
-            }
+        if let Some(db_err) = e.as_database_error()
+            && db_err.is_unique_violation()
+        {
+            return (StatusCode::CONFLICT, "email already registered");
         }
         error!("create user db error: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, "db error")

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IonContent, IonButton, IonItem, IonLabel, IonInput, IonCheckbox } from '@ionic/angular/standalone';
@@ -19,7 +19,7 @@ import { IonContent, IonButton, IonItem, IonLabel, IonInput, IonCheckbox } from 
     FormsModule,
   ],
 })
-export class CadastroPage implements OnInit {
+export class CadastroPage {
   nome = '';
   sobrenome = '';
   telefone = '';
@@ -29,8 +29,6 @@ export class CadastroPage implements OnInit {
   agreedToTerms = false;
 
   constructor() {}
-
-  ngOnInit() {}
 
   submitCadastro() {
     // Por enquanto, apenas limpa os campos (a persistência/validação server-side pode ser integrada depois).

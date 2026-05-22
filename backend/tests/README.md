@@ -43,6 +43,8 @@ DATABASE_URL=... cargo test --test auth -- --test-threads=1
 DATABASE_URL=... cargo test --test employees -- --test-threads=1
 DATABASE_URL=... cargo test --test users -- --test-threads=1
 DATABASE_URL=... cargo test --test embeddings -- --test-threads=1
+DATABASE_URL=... cargo test --test mqtt_handler -- --test-threads=1
+DATABASE_URL=... cargo test --test analytics -- --test-threads=1
 ```
 
 Run a single test by name:
@@ -53,16 +55,41 @@ DATABASE_URL=... cargo test --test employees update_employee_partial -- --test-t
 
 ## What's covered
 
-| File                | Coverage                                                                                                  |
-| ------------------- | --------------------------------------------------------------------------------------------------------- |
-| `auth.rs`           | `/health`, `/auth/login` (success, wrong pw, unknown email), 401s, expired tokens, wrong-secret tokens    |
-| `employees.rs`      | full CRUD + validation, ordering, partial PATCH, null shift clear                                         |
-| `users.rs`          | list, create, duplicate email (409), short password, empty email                                          |
-| `embeddings.rs`     | 512-d enforcement, FK 404, cascade on employee delete, list semantics, lossless f32 round-trip            |
-| `mqtt_handler.rs`   | `handle_publish` direct: granted/unknown insert, status/direction validation, default direction, FK error |
-| `analytics.rs`      | all 6 analytics endpoints: access-by-hour, summary-today, present-today, avg-delay (incl. noite post-midnight normalization), heatmap, events filters + pagination |
+| File                | Tests | Coverage                                                                                                  |
+| ------------------- | -----:| --------------------------------------------------------------------------------------------------------- |
+| `auth.rs`           | 9     | `/health`, `/auth/login` (success, wrong pw, unknown email), 401s, expired tokens, wrong-secret tokens    |
+| `employees.rs`      | 13    | full CRUD + validation, ordering, partial PATCH, null shift clear                                         |
+| `users.rs`          | 6     | list, create, duplicate email (409), short password, empty email                                          |
+| `embeddings.rs`     | 9     | 512-d enforcement, FK 404, cascade on employee delete, list semantics, lossless f32 round-trip            |
+| `mqtt_handler.rs`   | 9     | `handle_publish` direct: granted/unknown insert, status/direction validation, default direction, FK error |
+| `analytics.rs`      | 17    | all 6 analytics endpoints: access-by-hour, summary-today, present-today, avg-delay (incl. noite post-midnight normalization), heatmap, events filters + pagination |
 
-Total: 63 tests across 6 files.
+**Total: 63 tests across 6 files. ~7s wall-clock.**
+
+## Continuous integration
+
+The `backend` job in `.github/workflows/ci.yml` runs the full suite on
+every push and pull request, against a `pgvector/pgvector:pg16` service
+container. The Mosquitto broker is intentionally NOT provided to CI —
+verified that the test helper builds a rumqttc `AsyncClient` whose event
+loop is never polled, so no broker connection is attempted.
+
+### Coverage
+
+CI runs `cargo llvm-cov` (LLVM source-based instrumentation, installed
+via the `taiki-e/install-action@cargo-llvm-cov` prebuilt action) and:
+
+- Prints a per-file + total summary to the run log
+- Uploads `coverage.lcov` as a workflow artifact (`backend-coverage`)
+
+To reproduce locally:
+
+```bash
+# one-time: cargo install cargo-llvm-cov
+cd backend
+DATABASE_URL=... cargo llvm-cov --lcov --output-path coverage.lcov -- --test-threads=1
+cargo llvm-cov report --summary-only
+```
 
 ## Not yet covered
 

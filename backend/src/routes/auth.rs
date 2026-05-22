@@ -1,12 +1,11 @@
 //! JWT authentication.
 //!
 //! Exposes:
-//!   * `POST /auth/login` — exchanges email+password for a signed JWT.
-//!   * `Claims`           — struct that doubles as an Axum extractor.
-//!                          Any handler that takes `claims: Claims` as a
-//!                          parameter is automatically auth-protected:
-//!                          missing/invalid token => 401 before the
-//!                          handler body runs.
+//! * `POST /auth/login` — exchanges email+password for a signed JWT.
+//! * `Claims` — struct that doubles as an Axum extractor. Any handler
+//!   that takes `claims: Claims` as a parameter is automatically
+//!   auth-protected: missing/invalid token => 401 before the handler
+//!   body runs.
 //!
 //! Password storage: SHA-256 hex (matches `00_init.sql` seed). For
 //! production this should move to argon2/bcrypt with constant-time verify.

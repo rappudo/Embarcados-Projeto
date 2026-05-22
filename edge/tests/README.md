@@ -66,6 +66,48 @@ Total: 39 tests, ~7s wall-clock.
   ctest case. `ctest -V` lists them one by one; CI can filter with
   `-R PatternName`.
 
+## Continuous integration
+
+The `edge` job in `.github/workflows/ci.yml` runs the build + tests on
+every push and PR. Inside an `archlinux:latest` container so the entire
+dependency list maps to a single `pacman -S` (Ubuntu would need a
+hand-installed ONNXRuntime + libgpiod 2.x from 24.04 only). SQLiteCpp
+is built from source in CI (the package is only in AUR).
+
+A noteworthy production-grade tweak driven by CI: `facegate_hardware`
+and `facegate_vision` previously linked `${OpenCV_LIBS}` (every module
+Arch ships), which dragged in `opencv_cvv` (Qt6), `opencv_viz` (VTK),
+`opencv_hdf` (HDF5). Replaced with `opencv_core opencv_imgproc
+opencv_videoio` — the three modules actually used. Slims the Pi binary
+linkage too.
+
+### Coverage
+
+CI rebuilds with `--coverage` flags and runs `gcovr` to produce both an
+lcov-format file and a per-source HTML report. `gcovr` is used instead
+of `lcov + genhtml` because lcov 2.x doesn't keep up with the gcov
+output format from rolling gcc (gcc 16 produces empty reports under
+lcov; gcovr handles it cleanly). Filters: `--filter 'edge/src/'` and
+`--filter 'edge/apps/'` so the report counts production code only,
+not the test files themselves.
+
+To reproduce locally:
+
+```bash
+# one-time: pacman -S gcovr  (or: pip install gcovr)
+cd edge
+cmake -S . -B build -DBUILD_TESTING=ON \
+  -DCMAKE_CXX_FLAGS="-O0 --coverage" \
+  -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+cmake --build build -j$(nproc)
+ctest --test-dir build
+gcovr --root . --filter 'src/' --filter 'apps/' --print-summary build
+```
+
+Artifacts produced in CI: `coverage.info` (lcov format) +
+`coverage-html/` (browse `index.html`), zipped together as
+`edge-coverage`.
+
 ## Not yet covered
 
 - `face_detector` / `face_embedder` (`facegate_vision`) — depend on the

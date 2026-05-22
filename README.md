@@ -277,6 +277,51 @@ facegate/
 - **`docs/Main.tex`** — relatório completo do projeto. Compilar: `pdflatex docs/Main.tex` (rodar duas vezes para resolver `\ref`).
 - **`docs/CODE_GUIDE.md`** — referência file-by-file: o que cada arquivo faz, funções/classes que expõe, e como se conecta com o resto. Bom ponto de partida para entrar no código.
 - **`edge/DESIGN.md`** — decisões arquiteturais do módulo embarcado.
+- **`backend/tests/README.md`**, **`panel/src/app/TESTING.md`**, **`edge/tests/README.md`** — guias por camada para rodar e estender os testes automatizados.
+
+---
+
+## Testes automatizados
+
+**190 testes**, cobrindo as três camadas. Tudo roda em CI no GitHub Actions em cada push/PR — ver badge no topo deste README ou a aba *Actions*.
+
+| Camada  | Testes | Stack                                  | Comando                                                                                  |
+| ------- | ------:| -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Backend | 63     | Rust integration tests + Postgres real | `cd backend && DATABASE_URL=... cargo test -- --test-threads=1`                          |
+| Painel  | 88     | Jasmine + Karma + Chromium headless    | `cd panel && CHROME_BIN=/usr/bin/chromium npm test -- --watch=false --browsers=ChromeHeadlessCI` |
+| Edge    | 39     | GoogleTest + ctest                     | `cd edge && cmake -S . -B build -DBUILD_TESTING=ON && cmake --build build && ctest --test-dir build` |
+
+### O que cada suíte cobre
+
+- **Backend** (`backend/tests/`): JWT (login + expiry + secret mismatch), CRUD de funcionários, criação de usuários (incluindo duplicate-email 409), embeddings (round-trip lossless 512-d + 404 em FK violation + cascade), handler MQTT (insert, validações, drops silenciosos), todos os 6 endpoints de analytics (incluindo a normalização do `avg-delay` para `noite` cruzando a meia-noite).
+- **Painel** (`panel/src/app/`): `AuthService` (signal + expiry check), interceptor (Bearer attach, 401 → logout, sessão local expirada), guard, todos os serviços de `core/api`, mapeamento DTO ↔ `Funcionario`, `LoginPage` (success, 401, network error, double-submit guard, mensagens pt-BR).
+- **Edge** (`edge/tests/`): cosine matcher (boundary do threshold, upsert insert/replace, guard de norma zero), serialização MQTT (contrato de JSON em sync com o backend), cache SQLite (round-trip de BLOB com todos 512 floats, fila offline FIFO), parser TOML (campos obrigatórios, ranges válidos, GPIO pin uniqueness).
+
+### Coverage
+
+O job de CI gera relatório de cobertura por camada e publica como artifact (download na aba *Actions* → run específico). Ferramentas:
+
+| Camada  | Ferramenta        | Artifact            |
+| ------- | ----------------- | ------------------- |
+| Backend | `cargo-llvm-cov`  | `backend-coverage`  |
+| Painel  | `karma-coverage`  | `panel-coverage`    |
+| Edge    | `gcovr` (gcc 16+) | `edge-coverage`     |
+
+Para rodar localmente:
+
+```bash
+# Backend (precisa de llvm-tools-preview): cargo install cargo-llvm-cov
+cd backend && cargo llvm-cov --lcov --output-path coverage.lcov -- --test-threads=1
+
+# Painel
+cd panel && npm test -- --watch=false --browsers=ChromeHeadlessCI --code-coverage
+
+# Edge (gcovr via pacman ou pip install gcovr)
+cd edge && cmake -S . -B build -DBUILD_TESTING=ON \
+  -DCMAKE_CXX_FLAGS="-O0 --coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage" && \
+cmake --build build && ctest --test-dir build && \
+gcovr --root . --filter 'src/' --filter 'apps/' --print-summary build
+```
 
 ---
 

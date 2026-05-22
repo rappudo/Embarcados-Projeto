@@ -69,6 +69,7 @@ fn test_db_url() -> String {
 /// One-time setup per test (idempotent across the whole process):
 ///   * Create the test database if it doesn't exist.
 ///   * Apply migrations.
+///
 /// Returns a fresh pool bound to the current tokio runtime.
 pub async fn pool() -> PgPool {
     // Run the heavy setup once per process. Subsequent calls skip

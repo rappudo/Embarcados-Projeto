@@ -1,4 +1,4 @@
-import { Component, OnInit, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { Component, OnInit, inject, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
@@ -83,10 +83,10 @@ interface PerfilCorporativoData {
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 export class PerfilPage implements OnInit {
+  private http = inject(HttpClient);
+
   perfil?: PerfilUsuario;
   empresa?: EmpresaPerfil;
-
-  constructor(private http: HttpClient) {}
 
   ngOnInit(): void {
     this.http

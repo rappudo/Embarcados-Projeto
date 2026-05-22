@@ -67,9 +67,12 @@ Dado nunca trafega como imagem facial; apenas o vetor 512-d (ArcFace) circula.
 
 ```
 .
-├── README.md                       # Setup, modelos ONNX, slides
+├── README.md                       # Setup, modelos ONNX, slides, badge CI, testes
 ├── TODO-Apresentacao-27-05.md      # Roadmap específico para apresentação
 ├── .env / .env.example             # Variáveis de ambiente (POSTGRES_*, JWT_SECRET, MQTT_*)
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # 3 jobs paralelos (backend, panel, edge) + coverage
 ├── infra/                          # Docker stack + migrations Postgres
 │   ├── docker-compose.yml          # Postgres (pgvector/pg16) + Mosquitto
 │   ├── mosquitto.conf              # Broker config (anônimo, porta 1883)
@@ -79,45 +82,57 @@ Dado nunca trafega como imagem facial; apenas o vetor 512-d (ArcFace) circula.
 │       └── 02_upgrade_to_arcface.sql
 ├── backend/                        # Rust (Axum + sqlx + rumqttc + JWT)
 │   ├── Cargo.toml
-│   └── src/
-│       ├── main.rs
-│       ├── config.rs
-│       ├── db.rs
-│       ├── models/mod.rs
-│       ├── mqtt/mod.rs
-│       └── routes/
-│           ├── mod.rs
-│           ├── auth.rs
-│           ├── employees.rs
-│           ├── embeddings.rs
-│           ├── users.rs
-│           ├── analytics.rs
-│           └── system.rs
+│   ├── src/
+│   │   ├── lib.rs                  # expõe módulos para os testes de integração
+│   │   ├── main.rs
+│   │   ├── config.rs
+│   │   ├── db.rs
+│   │   ├── models/mod.rs
+│   │   ├── mqtt/mod.rs
+│   │   └── routes/
+│   │       ├── mod.rs
+│   │       ├── auth.rs
+│   │       ├── employees.rs
+│   │       ├── embeddings.rs
+│   │       ├── users.rs
+│   │       ├── analytics.rs
+│   │       └── system.rs
+│   └── tests/                      # 63 testes — auth, employees, users, embeddings, mqtt_handler, analytics
+│       ├── common/mod.rs           # harness (pool, spawn_app, seed helpers)
+│       ├── auth.rs / employees.rs / users.rs / embeddings.rs
+│       ├── mqtt_handler.rs / analytics.rs
+│       └── README.md               # como rodar + cobertura
 ├── edge/                           # C++ (Raspberry Pi 4)
-│   ├── CMakeLists.txt
+│   ├── CMakeLists.txt              # opt-in BUILD_TESTING para testes
 │   ├── DESIGN.md                   # ⚠ leia para o "porquê" de cada decisão
 │   ├── apps/
 │   │   ├── facegate/main.cpp       # daemon de reconhecimento
 │   │   └── enroll/main.cpp         # CLI de cadastro de rosto
-│   └── src/
-│       ├── domain/                 # types.hpp, employee.hpp, embedding.hpp, ...
-│       ├── config/                 # config.{hpp,cpp}
-│       ├── hardware/               # camera, turnstile, buzzer
-│       ├── storage/                # SQLite (cache + fila offline)
-│       ├── vision/                 # face_detector, face_embedder, matcher, onnx_session
-│       ├── mqtt/                   # publisher, subscriber, serialization, topics
-│       └── pipeline/               # pipeline.{hpp,cpp} (orquestrador)
+│   ├── src/
+│   │   ├── domain/                 # types.hpp, employee.hpp, embedding.hpp, ...
+│   │   ├── config/                 # config.{hpp,cpp}
+│   │   ├── hardware/               # camera, turnstile, buzzer
+│   │   ├── storage/                # SQLite (cache + fila offline)
+│   │   ├── vision/                 # face_detector, face_embedder, matcher, onnx_session
+│   │   ├── mqtt/                   # publisher, subscriber, serialization, topics
+│   │   └── pipeline/               # pipeline.{hpp,cpp} (orquestrador)
+│   └── tests/                      # 39 testes — matcher, serialization, storage, config
+│       ├── CMakeLists.txt
+│       ├── matcher_test.cpp / serialization_test.cpp / storage_test.cpp / config_test.cpp
+│       └── README.md
 └── panel/                          # Ionic + Angular (PWA admin)
     ├── angular.json, package.json, capacitor.config.ts ...
+    ├── karma.conf.js               # launcher ChromeHeadlessCI para o CI
     └── src/
         ├── main.ts, polyfills.ts, zone-flags.ts
         ├── environments/
         ├── theme/variables.scss
         └── app/
             ├── app.component.ts, app.routes.ts, app.config.ts
+            ├── TESTING.md          # guia da suíte do painel (54 testes)
             ├── core/               # versão "nova" — usar nas novas features
-            │   ├── api/            # serviços HTTP (1 arquivo por endpoint)
-            │   ├── auth/           # AuthService, guard, interceptor
+            │   ├── api/            # serviços HTTP (1 arquivo por endpoint) + *.spec.ts
+            │   ├── auth/           # AuthService, guard, interceptor + *.spec.ts
             │   ├── models/         # DTOs/interfaces espelhando o backend
             │   └── vision/         # FaceEmbeddingService (ORT-Web)
             ├── features/           # páginas "novas"
@@ -125,9 +140,8 @@ Dado nunca trafega como imagem facial; apenas o vetor 512-d (ArcFace) circula.
             │   ├── enrollment/, events/, reports/, settings/
             ├── shared/             # employee-card, event-card, stat-card
             │
-            ├── home/, login/, cadastro/, dashboard/, perfil/   # versão "legada"
-            ├── auth/                                          # legado
-            ├── employees/, employee-card/, event-card/        # legado
+            ├── home/, login/, cadastro/, dashboard/, perfil/   # versão "legada" + *.spec.ts
+            ├── employees/, employee-card/, event-card/        # legado + *.spec.ts
             └── analytics/                                     # legado
 ```
 
@@ -801,13 +815,15 @@ bootstrapApplication(AppComponent, {
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     provideIonicAngular(),
     provideRouter(routes, withPreloading(PreloadAllModules)),
-    provideHttpClient(withInterceptors([authInterceptor])),  // <- interceptor LEGADO
+    provideHttpClient(withInterceptors([authInterceptor])),  // <- core/auth/auth.interceptor
   ],
 });
 ```
-Atual entry-point. Usa o interceptor de `app/auth/auth.interceptor.ts`
-(legado). Quando a versão `core/` for ativada, substituir por
-`bootstrapApplication(AppComponent, appConfig)` (do `app.config.ts`).
+Entry-point efetivo do bundle. Após a consolidação do auth (ver
+`core/auth/auth.service.ts`), aponta para o interceptor de
+`core/auth/auth.interceptor.ts`. O bootstrap alternativo via
+`app.config.ts` continua presente para uma migração futura para
+`bootstrapApplication(AppComponent, appConfig)` mas ainda não está em uso.
 
 #### `panel/src/app/app.component.ts`
 Componente raiz vazio — só renderiza `<ion-app><ion-router-outlet /></ion-app>`
@@ -1154,18 +1170,13 @@ Constantes:
 - `TOLERANCIA_ATRASO_MIN = 15`
 - `TURNO_CORES`, `COR_TURNO_FALLBACK`, `DIAS_SEMANA`.
 
-#### `panel/src/app/auth/auth.service.ts` (legado)
-Versão sem signal. Persistência idêntica (`localStorage['facegate.auth.token']`).
-Métodos: `login`, `logout`, `getToken`, `isAuthenticated` (decodifica
-payload base64, valida `exp`).
-
-#### `panel/src/app/auth/auth.guard.ts` (legado)
-`isAuthenticated() ? true : router.parseUrl('/login')`.
-
-#### `panel/src/app/auth/auth.interceptor.ts` (legado)
-Mais simples que o novo: anexa token (exceto `/auth/login`), em 401 chama
-`logout()` + `navigateByUrl('/login')`. **Não** faz check proativo de
-expiração.
+> **Nota:** o diretório `panel/src/app/auth/` foi **removido** durante a
+> consolidação do auth. Existia uma duplicação completa (AuthService,
+> AuthGuard, AuthInterceptor) com chave de `localStorage` diferente
+> (`facegate.auth.token` vs `facegate.jwt`). O conjunto sobrevivente é
+> `panel/src/app/core/auth/` (signal-based, com check proativo de
+> expiração + eviction do token expirado). Pages legadas (`login`,
+> `dashboard`) agora importam de `../core/auth/auth.service`.
 
 #### `panel/src/app/employees/employees.service.ts` (legado)
 Service "tradutor" — converte entre o DTO do backend (`EmployeeDto` com
@@ -1190,12 +1201,153 @@ versão legada).
 
 ---
 
+## 6.6 Testes & CI
+
+190 testes automatizados distribuídos pelas três camadas, todos executados em CI no GitHub Actions a cada push/PR. Esta seção mapeia os arquivos de teste e o workflow de CI no mesmo formato file-by-file do resto do guia.
+
+### 6.6.1 `backend/tests/` — testes de integração Rust
+
+Cada arquivo `tests/*.rs` é compilado como um binário independente pelo Cargo. Todos exercem a API HTTP real contra um banco Postgres real (`facegate_test`, criado automaticamente).
+
+#### `backend/tests/common/mod.rs`
+Harness compartilhado. Expõe:
+- `pool() -> PgPool` — cria `facegate_test` se não existir, aplica `infra/migrations/*.sql`, retorna pool fresco. Setup pesado roda uma vez por processo via `OnceLock<Mutex<bool>>`; cada teste recebe seu próprio pool (pools sqlx são ligados ao runtime tokio em que foram criados — compartilhar entre `#[tokio::test]` quebra).
+- `spawn_app(pool) -> TestServer` — constrói o `Router` real com `AsyncClient` MQTT cujo eventloop **nunca é polled** (publish vira no-op, casamento com o "best-effort" da produção).
+- `reset_db(pool)`, `login_admin(server) -> token`, `sp_today_at(h, m) -> i64` (timestamps SP-local), `insert_employee_with_shift`, `insert_event` — helpers de seed.
+
+#### `backend/tests/auth.rs` — 9 testes
+`/health` público, `POST /auth/login` (success + 401 para senha errada + 401 para email desconhecido, ambos com a mesma mensagem para não vazar qual está errado), JWT extractor (missing/malformed/expired/wrong-secret → 401, válido → handler executa).
+
+#### `backend/tests/employees.rs` — 13 testes
+CRUD completo. Cobre: validação de nome vazio (400), 404 em get/patch/delete de id inexistente, ordenação por nome no `list`, PATCH parcial (`name` sem `shift` deixa shift intacto), shift=null explícito limpa via double-Option deserializer.
+
+#### `backend/tests/users.rs` — 6 testes
+List (admin seedado aparece), create success, duplicate email vira 409 (via `is_unique_violation`), senha < 4 chars → 400, email vazio → 400, list requer auth (401 sem header).
+
+#### `backend/tests/embeddings.rs` — 9 testes
+Validação de 512-d, 404 em FK violation (employee inexistente), cascade no `DELETE` de employee (embeddings desaparecem), **round-trip lossless de f32** (envia 512 valores múltiplos de 2⁻⁷, compara byte-a-byte vinda do `pgvector`), list ordenada por `created_at DESC`.
+
+#### `backend/tests/mqtt_handler.rs` — 9 testes
+Chama `backend::mqtt::handle_publish` direto (exposto como `pub` para testes), sem broker. Cobre granted/unknown insert, drops silenciosos para status/direction inválidos, `direction` default = `"in"` quando ausente, JSON malformado retorna Err, FK violation em employee_id → Err visível no log.
+
+#### `backend/tests/analytics.rs` — 17 testes
+Todos os 6 endpoints. Destaques:
+- `avg_delay` é o caso mais complexo da query no projeto inteiro. Tests pinam: turno `manhã` básico (0+15=15 min), filtro de `direction='out'` impede que evento de saída às 06:00 vire o MIN do dia, turno `noite` 22:30 = +30 min, **turno `noite` 00:30 do dia seguinte = +150 min** (normalização do delta `-77400s` para janela `(-12h, +12h]`).
+- `events` cobre filtros (employee_id, status, from/to), pagination (limit clamp a 200, offset), ordering desc por timestamp_ms.
+- `present-today` cobre in/out/in (último = in → presente), in apenas (presente), in+out (não-presente), evento de ontem (não-presente).
+
+### 6.6.2 `panel/src/app/**/*.spec.ts` — testes Angular
+
+Stack: Jasmine + Karma + Chromium headless (`ChromeHeadlessCI` launcher em `karma.conf.js` com `--no-sandbox --disable-gpu`). Todos os HTTP são mockados via `HttpTestingController` — nenhum acesso à rede.
+
+#### `panel/src/app/core/auth/auth.service.spec.ts` — 8 testes
+`login` armazena token + flip do signal, `logout` limpa + navega para `/login`, `isAuthenticated` cobre missing/malformed/expired/válido — e **evicta o token expirado** para o signal não mentir.
+
+#### `panel/src/app/core/auth/auth.interceptor.spec.ts` — 6 testes
+Attach do `Authorization: Bearer` para requests protegidas, skip em `/auth/*`, **proactive expiry** (token local expirado → short-circuit antes do HTTP, logout, throw), 401 do servidor → logout (mas NÃO em login).
+
+#### `panel/src/app/core/auth/auth.guard.spec.ts` — 3 testes
+Allow autenticado, `UrlTree('/login')` quando não, e **prova que usa `isAuthenticated()` estrito (não o `isLoggedIn()` barato)**: seed um token expirado, `isLoggedIn()` = true (presença), `isAuthenticated()` = false (exp passou), guard rejeita.
+
+#### `panel/src/app/core/api/*.spec.ts` — 17 testes
+`employees.service` (5), `users.service` (2), `analytics.service` (4), `events.service` (3), `presence.service` (1), `system.service` (2), `enrollment.service` (1). Cada um verifica URL + método + payload via `HttpTestingController`. `events` exercita filtros parciais (omitidos não viram `?key=` vazio). `system.service` pina o `responseType: 'text'` do `/health` (que retorna string `"ok"`, não JSON). `enrollment.service` pina a conversão `Float32Array → number[]` (sem isso, JSON.stringify produziria `{}`).
+
+#### `panel/src/app/employees/employees.service.spec.ts` — 9 testes
+Serviço **legado** (ainda em uso pela dashboard). Cobre mapeamento DTO ↔ `Funcionario`: case do shift (`'manhã'` DB → `'Manhã'` display), slice do `created_at` para YYYY-MM-DD, trim+lowercase do turno na escrita, null/whitespace colapsado para shift=null, PATCH parcial (chave ausente NÃO viaja no body).
+
+#### `panel/src/app/analytics/analytics.service.spec.ts` — 8 testes
+Serviço **legado** (em uso pela dashboard, distinto do `core/api/analytics.service`). URL + method para os 6 endpoints (`access-by-hour`, `avg-delay`, `presence-heatmap`, `summary-today`, `present-today`, `events`). `events` cobre no-filter (zero params), todos os filtros (employee_id/status/from/to/limit/offset), filtros parciais (apenas os fornecidos viajam).
+
+#### `panel/src/app/login/login.page.spec.ts` — 7 testes
+Success → navigateByUrl('/dashboard') + clear password (proteção de XSS local), 401 → "E-mail ou senha inválidos.", 0 → "Não foi possível conectar ao servidor.", 500 → genérica, double-submit guard (segunda chamada com `loading=true` não emite request), `errorMessage` limpa no início de cada submit.
+
+#### `panel/src/app/dashboard/dashboard.page.spec.ts` — 23 testes
+A maior suíte do painel. Cobre o data-flow real da página, com `EmployeesService` e `AnalyticsService` substituídos por stubs Jasmine:
+
+- **Wiring inicial:** `ngOnInit` carrega funcionários (`reloadFuncionarios`), enche `totalFuncionarios`, dedupe de `turnos`, computa `distribuicaoTurno` (counts + %), wiring de `avgDelay/accessByHour/presenceHeatmap`.
+- **KPIs:** `totalAtrasos` = funcionários com `avg_delay_minutes > 15` (tolerância), `atrasoMedioMin` = média de todas as linhas com 1 decimal, **0 quando array vazio** (evita NaN).
+- **accessByHour:** mapeia para `HHh` zero-padded, `maxAcessosHora ≥ 1` mesmo quando tudo é zero (evita divide-by-zero no scaling).
+- **presenceHeatmap:** agrega por DOW (filtra dias fora de [0,6]), `maxAcessoDiaSemana` reflete o pico.
+- **loadUnknowns:** **rolling window de 7 dias** (eventos antes do cutoff são descartados), `naoRecCount` reflete só os recentes, `ultimosNaoRec` mantém os 6 primeiros do response cru.
+- **Tabs:** `setTab` muda `activeTab`.
+- **Filtros:** `filtrarFuncionarios` aplica busca por substring case-insensitive + filtro de turno, `onTurnoChange` limpa `selectedFuncionario` se turno deixou de bater, `selecionarFuncionario` zera o search box.
+- **Cadastro:** trim de nome, valida vazio (sem hit na API), success POST + `reloadFuncionarios`, mapeia 400/0/other para mensagens pt-BR distintas, double-submit no-op enquanto `cadastroLoading`.
+- **Remoção:** success limpa selection + reload; error popa alert (sem reload).
+- **Logout:** chama `AuthService.logout()` + `navigateByUrl('/login')`.
+- **Formatters:** `formatDistance(null|undefined)` = `"—"`, números com 2 decimais.
+
+Out of scope da suíte: exportação CSV (DOM/Blob manipulation), pie SVG paths (pure visual).
+
+#### `panel/src/app/**/*.spec.ts` — smoke tests (8)
+`app.component`, cards (`employee-card`, `event-card`), páginas (`home`, `perfil`, `dashboard`, `cadastro`, `login`). Apenas verificam `should create`. Os stubs originais gerados pelo `ng generate` foram corrigidos: declarations → imports (componentes standalone), providers faltando (`HttpClient`, `IonicAngular`).
+
+### 6.6.3 `edge/tests/` — testes GoogleTest C++
+
+Opt-in via `-DBUILD_TESTING=ON` no `cmake`. Cada `*_test.cpp` linka contra a static lib relevante e é registrado no `ctest` via `gtest_discover_tests`.
+
+#### `edge/tests/CMakeLists.txt`
+Macro `add_edge_test(name lib)` injeta `EDGE_MIGRATIONS_DIR` como `target_compile_definitions` para os storage tests encontrarem `schema.sql` independente do build directory.
+
+#### `edge/tests/matcher_test.cpp` — 10 testes
+Cosine distance: identidade=0, ortogonal=1, **boundary exclusivo** (dist == threshold → não match), tie-breaking em cache não-ordenado, **guard de norma zero** (retorna `+inf`, não NaN). Upsert insert vs replace, remove preserva siblings, no-op em id inexistente.
+
+#### `edge/tests/serialization_test.cpp` — 6 testes
+Contrato JSON com o backend. Pina: `status` = `granted/unknown/denied`, **`employee_id`/`distance` viajam como `null` explícito** (não chave ausente, porque o backend espera a chave presente), `FaultKind` enum mapeado para `camera_failure/inference_failure/storage_failure/other`, **`timestamp_ms` em milissegundos, não nanos** (defensivo contra refactor pra `nanoseconds`).
+
+#### `edge/tests/storage_test.cpp` — 12 testes
+Cada teste aloca um temp DB único. Cobre: BLOB round-trip preserva todos os 512 floats bit-exato, `upsert` insere com id e substitui no mesmo id, **`upsert_embedding({id=0, ...})` lança `runtime_error`** (id=0 é convenção do enroll CLI; sync sempre vem com id do backend). `delete_employee_embeddings` cascateia, `pending_events` FIFO com `LIMIT`, delete por id preserva os outros.
+
+#### `edge/tests/config_test.cpp` — 11 testes
+Parser TOML + `validate()`. Seções obrigatórias ausentes → throw, `vision.threshold` fora de [0.0, 2.0] → throw, **`gpio.enabled=false` pula validação de pinos** (permite rodar em laptop dev sem GPIO), pinos GPIO duplicados → throw, `mqtt.broker_port` fora de [1, 65535] → throw, `logging.level` enum, seção `[recognition]` opcional com defaults positivos, TOML malformado → `runtime_error`.
+
+### 6.6.4 `.github/workflows/ci.yml` — pipeline CI
+
+Três jobs paralelos. Triggers: push em `main`, PRs contra `main`.
+
+#### Job `backend`
+- Service container `pgvector/pgvector:pg16` com `--health-cmd pg_isready`.
+- Sem mosquitto (eventloop nunca polled — verificado).
+- Toolchain `dtolnay/rust-toolchain@stable` + `llvm-tools-preview`.
+- Cache de `~/.cargo/registry/{index,cache}` + `~/.cargo/git/db` + `backend/target`, key = hash de `Cargo.lock`.
+- `cargo llvm-cov --locked --lcov --output-path coverage.lcov -- --test-threads=1` (substitui `cargo test`, sai com mesmo exit code e gera lcov).
+- Artifact `backend-coverage` contendo `coverage.lcov`.
+
+#### Job `panel`
+- `actions/setup-node@v4` com cache npm.
+- `npm ci` (rejeita drift entre package.json e package-lock.json).
+- `CHROME_BIN=/usr/bin/google-chrome` (pré-instalado em ubuntu-latest).
+- `npm test -- --watch=false --browsers=ChromeHeadlessCI --code-coverage` — o `karma-coverage` (já em devDependencies, reporters `text-summary` + `html` em `karma.conf.js`) imprime percentuais e escreve `panel/coverage/app/`.
+- Artifact `panel-coverage` com o diretório HTML.
+
+#### Job `edge`
+- Container `archlinux:latest` (deps mapeiam 1:1 para `pacman -S`; ONNXRuntime + libgpiod 2.x não estão limpos em Ubuntu).
+- Bootstrap mínimo (`git nodejs`) antes do `actions/checkout`, depois `pacman -Syu` com a lista cheia.
+- **SQLiteCpp construído do source** (3.3.3) — só está em AUR, evitamos bootstrap de helper.
+- `cmake -DBUILD_TESTING=ON -DCMAKE_CXX_FLAGS="-O0 --coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage"` produz `.gcda` durante o `ctest`.
+- `gcovr` (não lcov: lcov 2.x não acompanha gcov do gcc 16+ na Arch rolling). Filtros `--filter 'edge/src/'` e `--filter 'edge/apps/'` reportam apenas produção, não tests.
+- Artifact `edge-coverage` com `coverage.info` (lcov format) + `coverage-html/`.
+
+#### Detalhes do CMake da edge relacionados a CI
+
+- `option(BUILD_TESTING "Build unit tests" OFF)` mantém testes opt-in; build padrão da Pi continua rápido.
+- `target_link_libraries(facegate_vision PUBLIC opencv_core opencv_imgproc opencv_videoio ...)` — substituiu `${OpenCV_LIBS}` (que arrasta `opencv_cvv` → Qt6, `opencv_viz` → VTK, `opencv_hdf` → HDF5, todas ausentes no container CI). Mudança também slim no binário da Pi.
+
+### 6.6.5 Pendências de cobertura conhecidas
+
+| Camada  | Não coberto                                                                                                       | Razão                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Backend | `/system/mqtt-status`, `/models/*`, eventloop MQTT → DB end-to-end                                                | Passthrough trivial; `handle_publish` cobre o "core" do path       |
+| Painel  | DashboardPage CSV export + pie SVG paths, `core/vision/face-embedding.service`, `EnrollmentWizardComponent`       | DOM/Blob, ONNX no browser, fluxo de câmera — melhor cobertos por e2e/manual |
+| Edge    | `face_detector`, `face_embedder`, hardware (`Camera`, `Turnstile`, `Buzzer`, `RgbLed`), `MqttPublisher/Subscriber`, `Pipeline` | Modelo ONNX 130 MB, V4L2/libgpiod, broker — integração on-Pi mais apropriada |
+
+---
+
 ## 7. Comunicação cross-camada — referência rápida
 
 ### 7.1 Login → JWT → todas as rotas
 1. Painel: `AuthService.login(email, password)` → `POST /auth/login`.
 2. Backend (`auth.rs::login`): hash SHA-256 hex da senha, `SELECT … WHERE email AND password_hash`, gera JWT HS256 com `exp = now + 8h`.
-3. Painel guarda em `localStorage['facegate.jwt']` (ou `'facegate.auth.token'` na versão legada).
+3. Painel guarda em `localStorage['facegate.jwt']` (chave única após a consolidação do auth).
 4. Próximos requests: `authInterceptor` injeta `Authorization: Bearer <token>`.
 5. Backend: qualquer handler com parâmetro `_claims: Claims` → extractor decodifica antes; 401 em qualquer falha.
 6. 401 no painel → toast + `logout()` + redirect `/login`.
@@ -1274,11 +1426,12 @@ roda `SELECT … ORDER BY name` → JSON de `Vec<Employee>` → tipo
   roteada (`app.routes.ts`). Adicionar em `features/` sem atualizar as
   rotas resulta em código nunca renderizado.
 - `provideHttpClient(withInterceptors([authInterceptor]))` está em
-  `main.ts` (legado) — `app.config.ts` (novo) **só vai entrar em uso
-  quando substituir o bootstrap**.
-- `localStorage` mantém múltiplas chaves: `facegate.jwt`,
-  `facegate.auth.token` (legado), `facegate.apiBaseUrl`,
-  `facegate.piMqttHost`, `facegate.piHttpEndpoint`.
+  `main.ts`, hoje apontando para `core/auth/auth.interceptor.ts`.
+  `app.config.ts` (com mesma estrutura + ECharts) **só vai entrar em uso
+  quando substituir o bootstrap** para `bootstrapApplication(AppComponent, appConfig)`.
+- `localStorage` mantém: `facegate.jwt` (chave única do auth após
+  consolidação), `facegate.apiBaseUrl`, `facegate.piMqttHost`,
+  `facegate.piHttpEndpoint`.
 - Inferência facial em browser usa **modelos servidos pelo backend** via
   `${API_BASE_URL}/models/*.onnx` (`ServeDir::new("../edge/models")`).
   Se o backend não tiver acesso a `../edge/models`, o enrollment quebra.

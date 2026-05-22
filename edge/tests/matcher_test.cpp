@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
-#include <limits>
 
 #include "domain/domain.hpp"
 #include "vision/matcher.hpp"

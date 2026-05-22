@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["multipart"] }
-sqlx = { version = "0.7", features = [ "runtime-tokio", "tls-rustls", "postgres", "chrono" ] }
+sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-rustls", "postgres", "chrono" ] }
 rumqttc = "0.24"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -19,7 +19,7 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 anyhow = "1"
 sha2 = "0.11.0"
-pgvector = { version = "^0.3", features = ["sqlx"] }
+pgvector = { version = "^0.4", features = ["sqlx"] }
 tower-http = { version = "^0.5", features = ["cors", "fs"] }
 
 [dev-dependencies]
