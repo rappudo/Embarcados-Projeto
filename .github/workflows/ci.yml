@@ -61,7 +61,7 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -136,7 +136,7 @@ jobs:
       CHROME_BIN: /usr/bin/google-chrome
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -188,7 +188,7 @@ jobs:
         run: |
           pacman -Sy --noconfirm --needed git nodejs
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # All edge build/test deps in one transaction (except SQLiteCpp,
       # which is in AUR — built from source in the next step). `--needed`
