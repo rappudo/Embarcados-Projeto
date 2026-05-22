@@ -97,7 +97,7 @@ Dado nunca trafega como imagem facial; apenas o vetor 512-d (ArcFace) circula.
 │   │       ├── users.rs
 │   │       ├── analytics.rs
 │   │       └── system.rs
-│   └── tests/                      # 63 testes — auth, employees, users, embeddings, mqtt_handler, analytics
+│   └── tests/                      # 66 testes — auth, employees, users, embeddings, mqtt_handler, analytics, openapi
 │       ├── common/mod.rs           # harness (pool, spawn_app, seed helpers)
 │       ├── auth.rs / employees.rs / users.rs / embeddings.rs
 │       ├── mqtt_handler.rs / analytics.rs
@@ -635,6 +635,15 @@ Mapeia rotas:
 - Protegidas (via `Claims` extractor — basta o handler aceitar `Claims`
   como parâmetro): `/employees`, `/employees/:id`, `/employees/:id/embeddings`,
   `/users`, `/system/mqtt-status`, `/analytics/*`.
+- **OpenAPI / Swagger UI** (públicas, sem auth):
+  `/api-docs/openapi.json` (spec gerada em tempo de compilação pelo
+  `#[derive(OpenApi)] struct ApiDoc`) e `/swagger-ui/` (HTML
+  interativo, com botão *Authorize* que usa o bearer token via o
+  modifier `BearerSecurity`). A lista `paths(...)` e `components(schemas(...))`
+  do `ApiDoc` precisa estar em sync com os handlers — utoipa resolve
+  os nomes no compile time, então um typo falha o build. O teste
+  `backend/tests/openapi.rs` adicionalmente pina que cada handler está
+  no spec.
 
 ### 4.8 `backend/src/routes/auth.rs`
 Constantes: `TOKEN_TTL_SECS = 60 * 60 * 8` (8h).
@@ -1203,7 +1212,7 @@ versão legada).
 
 ## 6.6 Testes & CI
 
-190 testes automatizados distribuídos pelas três camadas, todos executados em CI no GitHub Actions a cada push/PR. Esta seção mapeia os arquivos de teste e o workflow de CI no mesmo formato file-by-file do resto do guia.
+193 testes automatizados distribuídos pelas três camadas, todos executados em CI no GitHub Actions a cada push/PR. Esta seção mapeia os arquivos de teste e o workflow de CI no mesmo formato file-by-file do resto do guia.
 
 ### 6.6.1 `backend/tests/` — testes de integração Rust
 
@@ -1235,6 +1244,12 @@ Todos os 6 endpoints. Destaques:
 - `avg_delay` é o caso mais complexo da query no projeto inteiro. Tests pinam: turno `manhã` básico (0+15=15 min), filtro de `direction='out'` impede que evento de saída às 06:00 vire o MIN do dia, turno `noite` 22:30 = +30 min, **turno `noite` 00:30 do dia seguinte = +150 min** (normalização do delta `-77400s` para janela `(-12h, +12h]`).
 - `events` cobre filtros (employee_id, status, from/to), pagination (limit clamp a 200, offset), ordering desc por timestamp_ms.
 - `present-today` cobre in/out/in (último = in → presente), in apenas (presente), in+out (não-presente), evento de ontem (não-presente).
+
+#### `backend/tests/openapi.rs` — 3 testes
+Garante que o spec OpenAPI gerado pelo `#[derive(OpenApi)]` em `routes/mod.rs` está sempre completo e bem-formado:
+- `/api-docs/openapi.json` retorna 200, é `openapi: "3.1.0"`, `info.title` contém "FaceGateway", e a security scheme `bearer_token` está registrada nos componentes.
+- **Cada handler está listado no spec.** Se alguém adicionar um novo `#[utoipa::path]` mas esquecer de incluí-lo na lista `paths(...)` do `ApiDoc`, esse teste falha no PR.
+- `/swagger-ui/` serve o HTML do Swagger UI (200, com `swagger-ui` no body).
 
 ### 6.6.2 `panel/src/app/**/*.spec.ts` — testes Angular
 

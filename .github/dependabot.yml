@@ -1,0 +1,58 @@
+# Dependabot — weekly dependency update PRs for the three ecosystems
+# that have manifests in this repo.
+#
+# - `cargo`           → backend/Cargo.toml
+# - `npm`             → panel/package.json
+# - `github-actions`  → .github/workflows/*.yml
+#
+# The edge layer (C++) has no manifest format Dependabot understands;
+# its system packages (OpenCV, ONNXRuntime, libgpiod, etc.) come from
+# pacman in the CI container, and SQLiteCpp is pinned in ci.yml — those
+# bumps happen manually.
+#
+# Weekly cadence keeps PR volume manageable while still surfacing
+# security advisories within ~7 days.
+
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(backend)"
+    labels:
+      - dependencies
+      - backend
+
+  - package-ecosystem: npm
+    directory: /panel
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(panel)"
+    labels:
+      - dependencies
+      - panel
+    # Group all Angular packages into a single PR. Angular's monorepo
+    # releases mean piecemeal bumps trigger peer-dep mismatches —
+    # batching avoids 10 broken PRs and one merge-able one.
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+          - "@angular-eslint/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(ci)"
+    labels:
+      - dependencies
+      - ci

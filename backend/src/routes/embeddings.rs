@@ -15,6 +15,7 @@ use pgvector::Vector;
 use rumqttc::{AsyncClient, QoS};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
+use utoipa::ToSchema;
 
 const SYNC_UPSERT_PREFIX: &str = "facegate/sync/embeddings/upsert";
 
@@ -25,12 +26,14 @@ const EMBEDDING_DIM: usize = 512;
 
 // ---------- wire types ----------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateEmbedding {
+    /// L2-normalized 512-d ArcFace embedding. Any other length → 400.
+    #[schema(min_items = 512, max_items = 512)]
     pub vector: Vec<f32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct EmbeddingResponse {
     pub id: i32,
     pub vector: Vec<f32>,
@@ -102,6 +105,20 @@ impl From<EmbeddingRow> for EmbeddingResponse {
 
 // ---------- POST /employees/:id/embeddings ----------
 
+#[utoipa::path(
+    post,
+    path = "/employees/{id}/embeddings",
+    tag = "embeddings",
+    security(("bearer_token" = [])),
+    params(("id" = i32, Path, description = "Employee id")),
+    request_body = CreateEmbedding,
+    responses(
+        (status = 201, description = "Embedding stored; also published as a retained MQTT sync message", body = EmbeddingResponse),
+        (status = 400, description = "Vector length != 512"),
+        (status = 401, description = "Missing or invalid Authorization header"),
+        (status = 404, description = "Employee not found"),
+    ),
+)]
 pub async fn create(
     _claims: Claims,
     State(state): State<AppState>,
@@ -153,6 +170,18 @@ pub async fn create(
 
 // ---------- GET /employees/:id/embeddings ----------
 
+#[utoipa::path(
+    get,
+    path = "/employees/{id}/embeddings",
+    tag = "embeddings",
+    security(("bearer_token" = [])),
+    params(("id" = i32, Path, description = "Employee id")),
+    responses(
+        (status = 200, description = "All embeddings for the employee, newest first", body = Vec<EmbeddingResponse>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+        (status = 404, description = "Employee not found"),
+    ),
+)]
 pub async fn list(
     _claims: Claims,
     State(state): State<AppState>,

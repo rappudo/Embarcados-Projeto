@@ -13,6 +13,7 @@ use axum::{
 use rumqttc::{AsyncClient, QoS};
 use serde::{Deserialize, Deserializer};
 use tracing::{error, info};
+use utoipa::ToSchema;
 
 use super::AppState;
 use super::auth::Claims;
@@ -48,15 +49,18 @@ where
 
 // ---------- request bodies ----------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateEmployee {
+    #[schema(example = "Alice")]
     pub name: String,
+    #[schema(example = "manhã")]
     pub shift: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateEmployee {
     pub name: Option<String>,
+    /// `null` clears the shift; absent key leaves it unchanged.
     #[serde(default, deserialize_with = "double_option")]
     pub shift: Option<Option<String>>,
 }
@@ -64,6 +68,16 @@ pub struct UpdateEmployee {
 // ---------- handlers ----------
 
 /// GET /employees
+#[utoipa::path(
+    get,
+    path = "/employees",
+    tag = "employees",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "All employees, ordered by name", body = Vec<Employee>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn list(
     _claims: Claims,
     State(state): State<AppState>,
@@ -82,6 +96,18 @@ pub async fn list(
 }
 
 /// GET /employees/:id
+#[utoipa::path(
+    get,
+    path = "/employees/{id}",
+    tag = "employees",
+    security(("bearer_token" = [])),
+    params(("id" = i32, Path, description = "Employee id")),
+    responses(
+        (status = 200, description = "Employee record", body = Employee),
+        (status = 401, description = "Missing or invalid Authorization header"),
+        (status = 404, description = "Employee not found"),
+    ),
+)]
 pub async fn get_one(
     _claims: Claims,
     State(state): State<AppState>,
@@ -103,6 +129,18 @@ pub async fn get_one(
 }
 
 /// POST /employees    body: {"name": "...", "shift": "manhã"|null}
+#[utoipa::path(
+    post,
+    path = "/employees",
+    tag = "employees",
+    security(("bearer_token" = [])),
+    request_body = CreateEmployee,
+    responses(
+        (status = 201, description = "Employee created", body = Employee),
+        (status = 400, description = "Empty name"),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn create(
     _claims: Claims,
     State(state): State<AppState>,
@@ -131,6 +169,20 @@ pub async fn create(
 }
 
 /// PATCH /employees/:id    body: {"name"?: "...", "shift"?: "..."}
+#[utoipa::path(
+    patch,
+    path = "/employees/{id}",
+    tag = "employees",
+    security(("bearer_token" = [])),
+    params(("id" = i32, Path, description = "Employee id")),
+    request_body = UpdateEmployee,
+    responses(
+        (status = 200, description = "Employee updated", body = Employee),
+        (status = 400, description = "Validation failed"),
+        (status = 401, description = "Missing or invalid Authorization header"),
+        (status = 404, description = "Employee not found"),
+    ),
+)]
 pub async fn update(
     _claims: Claims,
     State(state): State<AppState>,
@@ -185,6 +237,18 @@ pub async fn update(
 }
 
 /// DELETE /employees/:id
+#[utoipa::path(
+    delete,
+    path = "/employees/{id}",
+    tag = "employees",
+    security(("bearer_token" = [])),
+    params(("id" = i32, Path, description = "Employee id")),
+    responses(
+        (status = 204, description = "Employee deleted (cascades to embeddings; events FK set to NULL)"),
+        (status = 401, description = "Missing or invalid Authorization header"),
+        (status = 404, description = "Employee not found"),
+    ),
+)]
 pub async fn delete(
     _claims: Claims,
     State(state): State<AppState>,

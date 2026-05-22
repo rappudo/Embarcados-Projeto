@@ -14,6 +14,16 @@ use super::auth::Claims;
 use crate::mqtt::MqttState;
 
 /// GET /system/mqtt-status
+#[utoipa::path(
+    get,
+    path = "/system/mqtt-status",
+    tag = "system",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "Live MQTT broker connection snapshot", body = MqttState),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn mqtt_status(
     _claims: Claims,
     State(state): State<AppState>,

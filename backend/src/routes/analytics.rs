@@ -18,6 +18,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
+use utoipa::{IntoParams, ToSchema};
 
 use super::AppState;
 use super::auth::Claims;
@@ -28,12 +29,22 @@ const TZ: &str = "America/Sao_Paulo";
 // GET /analytics/access-by-hour
 // ============================================================
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct HourCount {
     pub hour: i32,
     pub count: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/analytics/access-by-hour",
+    tag = "analytics",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "24-element zero-filled bucket array", body = Vec<HourCount>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn access_by_hour(
     _claims: Claims,
     State(state): State<AppState>,
@@ -78,25 +89,41 @@ pub async fn access_by_hour(
 // GET /analytics/events?employee_id=&from=&to=&limit=&offset=
 // ============================================================
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct EventsQuery {
     pub employee_id: Option<i32>,
+    /// `granted` or `unknown`.
     pub status: Option<String>,
-    pub from: Option<i64>, // unix ms
-    pub to: Option<i64>,   // unix ms
+    /// Unix epoch milliseconds — inclusive lower bound.
+    pub from: Option<i64>,
+    /// Unix epoch milliseconds — inclusive upper bound.
+    pub to: Option<i64>,
+    /// 1..=200 (clamped server-side).
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
 pub struct EventRow {
     pub id: i32,
-    pub employee_name: Option<String>, // NULL when employee_id is NULL or employee was deleted
+    pub employee_name: Option<String>,
     pub status: String,
     pub distance: Option<f64>,
     pub timestamp_ms: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/analytics/events",
+    tag = "analytics",
+    security(("bearer_token" = [])),
+    params(EventsQuery),
+    responses(
+        (status = 200, description = "Filtered access events, newest first", body = Vec<EventRow>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn events(
     _claims: Claims,
     State(state): State<AppState>,
@@ -141,14 +168,25 @@ pub async fn events(
 // GET /analytics/avg-delay
 // ============================================================
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
 pub struct AvgDelay {
     pub employee_id: i32,
     pub name: String,
-    pub avg_delay_minutes: f64, // positive = late, negative = early
+    /// Positive = late, negative = early.
+    pub avg_delay_minutes: f64,
     pub days_observed: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/analytics/avg-delay",
+    tag = "analytics",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "Per-employee average tardiness, normalized to a (-12h, +12h] window", body = Vec<AvgDelay>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn avg_delay(
     _claims: Claims,
     State(state): State<AppState>,
@@ -219,13 +257,25 @@ pub async fn avg_delay(
 // GET /analytics/presence-heatmap
 // ============================================================
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
 pub struct HeatmapCell {
-    pub day: i32,  // 0=Sunday … 6=Saturday (Postgres DOW convention)
-    pub hour: i32, // 0..=23
+    /// Postgres DOW convention: 0 = Sunday, 6 = Saturday.
+    pub day: i32,
+    /// 0..=23
+    pub hour: i32,
     pub count: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/analytics/presence-heatmap",
+    tag = "analytics",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "Sparse (day, hour, count) grid — only populated cells are returned", body = Vec<HeatmapCell>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn presence_heatmap(
     _claims: Claims,
     State(state): State<AppState>,
@@ -265,13 +315,23 @@ pub async fn presence_heatmap(
 /// every event defaults to 'in', so this query effectively counts
 /// "anyone with a granted entry today." Once exit events come online
 /// the same query produces the correct presence list with no changes.
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
 pub struct PresentEmployee {
     pub employee_id: i32,
     pub name: String,
     pub last_entry_ms: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/analytics/present-today",
+    tag = "analytics",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "Employees whose latest event today is direction='in'", body = Vec<PresentEmployee>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn present_today(
     _claims: Claims,
     State(state): State<AppState>,
@@ -324,13 +384,23 @@ pub async fn present_today(
 // GET /analytics/summary-today
 // ============================================================
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
 pub struct SummaryToday {
     pub total: i64,
     pub granted: i64,
     pub unknown: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/analytics/summary-today",
+    tag = "analytics",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "KPI counters for events that occurred today in SP local time", body = SummaryToday),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn summary_today(
     _claims: Claims,
     State(state): State<AppState>,

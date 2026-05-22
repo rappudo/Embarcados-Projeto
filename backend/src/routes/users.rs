@@ -20,24 +20,37 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{error, info};
+use utoipa::ToSchema;
 
 use super::AppState;
 use super::auth::Claims;
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct UserRow {
     pub id: i32,
     pub email: String,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateUser {
+    #[schema(example = "operator@facegate.local")]
     pub email: String,
+    /// At least 4 characters. Hashed server-side (SHA-256 hex).
     pub password: String,
 }
 
 /// GET /users
+#[utoipa::path(
+    get,
+    path = "/users",
+    tag = "users",
+    security(("bearer_token" = [])),
+    responses(
+        (status = 200, description = "All operator accounts, oldest first", body = Vec<UserRow>),
+        (status = 401, description = "Missing or invalid Authorization header"),
+    ),
+)]
 pub async fn list(
     _claims: Claims,
     State(state): State<AppState>,
@@ -56,6 +69,19 @@ pub async fn list(
 }
 
 /// POST /users    body: {"email": "...", "password": "..."}
+#[utoipa::path(
+    post,
+    path = "/users",
+    tag = "users",
+    security(("bearer_token" = [])),
+    request_body = CreateUser,
+    responses(
+        (status = 201, description = "User created", body = UserRow),
+        (status = 400, description = "Empty email or password < 4 chars"),
+        (status = 401, description = "Missing or invalid Authorization header"),
+        (status = 409, description = "Email already registered"),
+    ),
+)]
 pub async fn create(
     _claims: Claims,
     State(state): State<AppState>,

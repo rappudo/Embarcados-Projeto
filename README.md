@@ -221,6 +221,10 @@ Todos os endpoints protegidos exigem `Authorization: Bearer <jwt>` (obtido em `P
 - `GET /users` / `POST /users`
 - `GET /models/*` — serve `edge/models/` como assets estáticos
 
+### Documentação interativa (OpenAPI / Swagger)
+- `GET /swagger-ui/` — Swagger UI interativo, lista todos os endpoints com payloads e botão "Try it out".
+- `GET /api-docs/openapi.json` — spec OpenAPI 3.1 gerada a partir das anotações `#[utoipa::path]` nos handlers.
+
 ---
 
 ## Estrutura do repositório
@@ -274,8 +278,9 @@ facegate/
 
 ## Documentação adicional
 
+- **`CONTRIBUTING.md`** — onboarding em uma página: setup, comandos por camada, fluxo de PR. Bom ponto de partida se você acabou de clonar o repo.
 - **`docs/Main.tex`** — relatório completo do projeto. Compilar: `pdflatex docs/Main.tex` (rodar duas vezes para resolver `\ref`).
-- **`docs/CODE_GUIDE.md`** — referência file-by-file: o que cada arquivo faz, funções/classes que expõe, e como se conecta com o resto. Bom ponto de partida para entrar no código.
+- **`docs/CODE_GUIDE.md`** — referência file-by-file: o que cada arquivo faz, funções/classes que expõe, e como se conecta com o resto.
 - **`edge/DESIGN.md`** — decisões arquiteturais do módulo embarcado.
 - **`backend/tests/README.md`**, **`panel/src/app/TESTING.md`**, **`edge/tests/README.md`** — guias por camada para rodar e estender os testes automatizados.
 
@@ -283,11 +288,11 @@ facegate/
 
 ## Testes automatizados
 
-**190 testes**, cobrindo as três camadas. Tudo roda em CI no GitHub Actions em cada push/PR — ver badge no topo deste README ou a aba *Actions*.
+**193 testes**, cobrindo as três camadas. Tudo roda em CI no GitHub Actions em cada push/PR — ver badge no topo deste README ou a aba *Actions*.
 
 | Camada  | Testes | Stack                                  | Comando                                                                                  |
 | ------- | ------:| -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Backend | 63     | Rust integration tests + Postgres real | `cd backend && DATABASE_URL=... cargo test -- --test-threads=1`                          |
+| Backend | 66     | Rust integration tests + Postgres real | `cd backend && DATABASE_URL=... cargo test -- --test-threads=1`                          |
 | Painel  | 88     | Jasmine + Karma + Chromium headless    | `cd panel && CHROME_BIN=/usr/bin/chromium npm test -- --watch=false --browsers=ChromeHeadlessCI` |
 | Edge    | 39     | GoogleTest + ctest                     | `cd edge && cmake -S . -B build -DBUILD_TESTING=ON && cmake --build build && ctest --test-dir build` |
 

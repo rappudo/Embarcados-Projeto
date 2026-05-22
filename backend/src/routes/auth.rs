@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
+use utoipa::ToSchema;
 
 use super::AppState;
 
@@ -76,17 +77,30 @@ impl FromRequestParts<AppState> for Claims {
 // POST /auth/login
 // ----------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
+    #[schema(example = "admin@facegate.local")]
     email: String,
+    #[schema(example = "admin123")]
     password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct LoginResponse {
+    /// JWT (HS256) valid for 8 hours.
     token: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Authentication succeeded", body = LoginResponse),
+        (status = 401, description = "Invalid credentials"),
+    ),
+)]
 pub async fn login(
     State(state): State<AppState>,
     Json(body): Json<LoginRequest>,

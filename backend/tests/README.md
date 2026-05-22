@@ -63,8 +63,9 @@ DATABASE_URL=... cargo test --test employees update_employee_partial -- --test-t
 | `embeddings.rs`     | 9     | 512-d enforcement, FK 404, cascade on employee delete, list semantics, lossless f32 round-trip            |
 | `mqtt_handler.rs`   | 9     | `handle_publish` direct: granted/unknown insert, status/direction validation, default direction, FK error |
 | `analytics.rs`      | 17    | all 6 analytics endpoints: access-by-hour, summary-today, present-today, avg-delay (incl. noite post-midnight normalization), heatmap, events filters + pagination |
+| `openapi.rs`        | 3     | `/api-docs/openapi.json` shape, every handler is in the spec, `/swagger-ui/` HTML serves                  |
 
-**Total: 63 tests across 6 files. ~7s wall-clock.**
+**Total: 66 tests across 7 files. ~7s wall-clock.**
 
 ## Continuous integration
 

@@ -32,7 +32,7 @@ const TOPIC_HEALTH: &str = "facegate/health/#";
 /// true on each successful `ConnAck`. `last_message_at_ms` is set on
 /// any inbound Publish, regardless of topic — it's a proxy for "broker
 /// is alive AND edge is talking" combined.
-#[derive(Debug, Default, Clone, serde::Serialize)]
+#[derive(Debug, Default, Clone, serde::Serialize, utoipa::ToSchema)]
 pub struct MqttState {
     pub connected: bool,
     pub last_message_at_ms: Option<i64>,
