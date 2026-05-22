@@ -1,0 +1,178 @@
+# Continuous Integration for FaceGateway.
+#
+# Three jobs run in parallel — one per project layer. They're independent
+# (no needs:) so a slow edge build doesn't block the fast backend/panel
+# results. `fail-fast: false` is implicit at the job level; if any single
+# job fails the others still run, which is what we want when triaging.
+#
+# Triggers: every push to main and every pull request. We deliberately
+# do NOT run on tags or other branches — that's a separate workflow if
+# we ever cut releases.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ===========================================================================
+  # Backend (Rust + Axum + sqlx + Postgres/pgvector)
+  # ===========================================================================
+  backend:
+    name: Backend (Rust)
+    runs-on: ubuntu-latest
+
+    # Postgres with pgvector — the test helper applies infra/migrations/*.sql
+    # against a freshly-created `facegate_test` database on first run.
+    # No MQTT broker needed: the integration tests build an AsyncClient but
+    # never poll its event loop, so no TCP connection is attempted.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: facegate
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: facegate
+        ports:
+          - 5432:5432
+        # Block the job until the DB is actually accepting connections.
+        # Without this, the first test occasionally fires before pg is
+        # ready and times out.
+        options: >-
+          --health-cmd "pg_isready -U facegate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The test helper strips the database name off the URL and reconnects
+      # to `postgres` to issue CREATE DATABASE facegate_test. So this URL
+      # only needs to reach the cluster, not the (auto-created) test DB.
+      DATABASE_URL: postgresql://facegate:ci_password@localhost:5432/facegate
+      # Quieter test output. Errors still surface; we don't need every
+      # `info!()` from successful login flows in the CI log.
+      RUST_LOG: warn
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Cache cargo's registry index, downloaded crate sources, and the
+      # backend's target/ directory. Keyed on Cargo.lock so any dep bump
+      # invalidates. `restore-keys` gives a partial hit (stale crates)
+      # when the lock changes, which still beats a cold build.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            backend/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('backend/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # --locked: fail CI if Cargo.lock would need to change. Catches
+      # accidentally-committed Cargo.toml updates without a lock refresh.
+      # --test-threads=1: required by the test helper (tests share a
+      # single test database; reset_db() would race under parallel).
+      - name: Run tests
+        run: cargo test --locked -- --test-threads=1
+
+  # ===========================================================================
+  # Panel (Angular 20 + Ionic 8 + Jasmine/Karma)
+  # ===========================================================================
+  panel:
+    name: Panel (Angular)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: panel
+
+    env:
+      # google-chrome is preinstalled on ubuntu-latest runners. karma-
+      # chrome-launcher reads CHROME_BIN to locate it, then karma.conf.js
+      # spawns it under the `ChromeHeadlessCI` launcher (which adds
+      # --no-sandbox --disable-gpu, both required inside the runner
+      # sandbox).
+      CHROME_BIN: /usr/bin/google-chrome
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: panel/package-lock.json
+
+      # `npm ci` (not `npm install`) is the CI-specific install: it errors
+      # if package.json and package-lock.json disagree, and skips the
+      # heuristic update logic. Faster and more deterministic.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --watch=false --browsers=ChromeHeadlessCI
+
+  # ===========================================================================
+  # Edge (C++17 + OpenCV + ONNXRuntime + libgpiod + Mosquitto + SQLiteCpp)
+  # ===========================================================================
+  edge:
+    name: Edge (C++)
+    runs-on: ubuntu-latest
+
+    # Run inside an Arch container because that's where the dependency
+    # set maps cleanly to a single package manager invocation. Ubuntu
+    # would need an ONNXRuntime tarball + custom pkg-config setup, plus
+    # libgpiod 2.x isn't in 22.04 (only 24.04). Arch's repos cover the
+    # whole list, including gtest. Time cost vs. ubuntu-latest: ~1 min
+    # extra for package install, which is fine.
+    container:
+      image: archlinux:latest
+
+    steps:
+      # actions/checkout needs `git`. Vanilla archlinux:latest doesn't
+      # ship it, so install before the checkout step.
+      - name: Bootstrap git + nodejs (for actions/checkout)
+        run: |
+          pacman -Sy --noconfirm --needed git nodejs
+
+      - uses: actions/checkout@v4
+
+      # All edge build/test deps in one transaction. `--needed` skips
+      # already-installed packages, `-Syu` keeps the rolling base in
+      # sync with the repos we're pulling from. Heavyweight: OpenCV +
+      # ONNXRuntime add up to ~700 MB unpacked, which dominates the
+      # job wall-clock.
+      - name: Install build deps
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel cmake pkgconf \
+            opencv onnxruntime-cpu \
+            libgpiod mosquitto sqlitecpp \
+            nlohmann-json tomlplusplus gtest
+
+      - name: Configure
+        run: cmake -S edge -B edge/build -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build edge/build -j$(nproc)
+
+      # --output-on-failure: ctest prints the captured stdout of any
+      # failing test inline. Without it we'd see "Failed" with no detail
+      # and have to re-run locally to triage.
+      - name: Test
+        run: ctest --test-dir edge/build --output-on-failure
