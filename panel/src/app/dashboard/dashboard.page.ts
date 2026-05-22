@@ -9,17 +9,13 @@ import {
   IonHeader,
   IonIcon,
   IonInput,
-  IonItem,
   IonSearchbar,
   IonSelect,
   IonSelectOption,
-  IonText,
-  IonToolbar,
   IonCard,
   IonCardHeader,
   IonCardTitle,
   IonCardContent,
-  IonLabel,
   AlertController,
   ModalController,
 } from '@ionic/angular/standalone';
@@ -89,17 +85,13 @@ const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     IonHeader,
     IonIcon,
     IonInput,
-    IonItem,
     IonSearchbar,
     IonSelect,
     IonSelectOption,
-    IonText,
-    IonToolbar,
     IonCard,
     IonCardHeader,
     IonCardTitle,
     IonCardContent,
-    IonLabel,
     EmployeeCardComponent,
   ],
 })
@@ -310,7 +302,7 @@ export class DashboardPage implements OnInit {
         this.cadastroNome = '';
         this.cadastroTurno = null;
         this.reloadFuncionarios();
-        this.openEnrollmentWizard(f);
+        this.openEnrollmentWizard(f, 'cadastro');
       },
       error: (err: HttpErrorResponse) => {
         this.cadastroLoading = false;
@@ -325,13 +317,27 @@ export class DashboardPage implements OnInit {
     });
   }
 
-  private async openEnrollmentWizard(employee: Funcionario): Promise<void> {
+  cadastrarRostoFuncionario(): void {
+    if (!this.selectedFuncionario) return;
+    this.openEnrollmentWizard(this.selectedFuncionario, 'funcionarios');
+  }
+
+  // `source` controls where post-dismiss feedback lands. Cadastro shows
+  // the success banner inside the cadastro card; the funcionarios path
+  // just refreshes the list silently — `cadastroSuccess` belongs to a
+  // different tab and would only surface the next time the user
+  // navigates back to it.
+  private async openEnrollmentWizard(
+    employee: Funcionario,
+    source: 'cadastro' | 'funcionarios',
+  ): Promise<void> {
     const modal = await this.modalCtrl.create({
       component: EnrollmentWizardComponent,
       componentProps: {
         employeeId: employee.id,
         employeeName: employee.nome,
       },
+      cssClass: 'enrollment-modal',
       backdropDismiss: false,
     });
 
@@ -341,12 +347,39 @@ export class DashboardPage implements OnInit {
       count?: number;
     }>();
 
-    if (data?.status === 'completed') {
-      this.cadastroSuccess =
-        `Funcionário "${employee.nome}" cadastrado com ${data.count ?? 0} captura(s).`;
-    } else {
-      this.cadastroSuccess =
-        `Funcionário "${employee.nome}" cadastrado. Capture as fotos depois pela lista.`;
+    if (source === 'cadastro') {
+      if (data?.status === 'completed') {
+        const count = data.count ?? 0;
+        if (count === 0) {
+          this.cadastroSuccess =
+            `Funcionário "${employee.nome}" cadastrado sem rosto. ` +
+            `Capture as fotos depois pela aba Funcionários.`;
+        } else {
+          this.cadastroSuccess =
+            `Funcionário "${employee.nome}" cadastrado com ${count} ` +
+            `${count === 1 ? 'captura' : 'capturas'}.`;
+        }
+      } else {
+        // Cancel mid-enrollment → undo the employee creation. The
+        // wizard requires an existing id (it POSTs embeddings against
+        // it), so the row had to be created upfront. If the admin
+        // bails out, we revert instead of leaving an orphan record.
+        this.employees.delete(employee.id).subscribe({
+          next: () => {
+            this.reloadFuncionarios();
+            this.cadastroSuccess = `Cadastro de "${employee.nome}" cancelado.`;
+          },
+          error: () => {
+            this.cadastroError =
+              `Erro ao cancelar cadastro de "${employee.nome}". ` +
+              `Remova manualmente pela aba Funcionários.`;
+          },
+        });
+      }
+    }
+
+    if (source === 'funcionarios' && data?.status === 'completed') {
+      this.reloadFuncionarios();
     }
   }
 

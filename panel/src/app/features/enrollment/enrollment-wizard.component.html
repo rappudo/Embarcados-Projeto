@@ -112,14 +112,15 @@
     <ion-button
       expand="block"
       class="ion-margin"
-      [disabled]="captures().length < minCaptures || uploading()"
+      [disabled]="uploading()"
       (click)="submit()"
     >
       <ion-icon name="checkmark-outline" slot="start"></ion-icon>
-      @if (captures().length < minCaptures) {
-        Concluir (mínimo {{ minCaptures }})
+      @if (captures().length === 0) {
+        Cadastrar funcionário (sem rosto)
       } @else {
-        Concluir ({{ captures().length }} fotos)
+        Cadastrar funcionário ({{ captures().length }}
+        {{ captures().length === 1 ? 'foto' : 'fotos' }})
       }
     </ion-button>
   </ion-toolbar>

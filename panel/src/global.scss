@@ -35,3 +35,23 @@
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
 /* @import '@ionic/angular/css/palettes/dark.system.css'; */
+
+/* ----------------------------------------------------------------------------
+ * Modal sizing overrides
+ * --------------------------------------------------------------------------
+ * Modals render at the body level outside any component's encapsulated
+ * styles, so size overrides have to live here.
+ *
+ * Enrollment wizard: the default ~600x600 card was cramping the camera
+ * preview + captured-thumbnails grid on laptop screens, forcing scroll
+ * with ~90% of the viewport empty around the modal. Width + height now
+ * scale with the viewport so the wizard breathes on big monitors but
+ * stays usable on smaller ones.
+ */
+ion-modal.enrollment-modal {
+  --width: min(960px, 92vw);
+  --height: min(880px, 90vh);
+  --max-width: 96vw;
+  --max-height: 96vh;
+  --border-radius: 14px;
+}

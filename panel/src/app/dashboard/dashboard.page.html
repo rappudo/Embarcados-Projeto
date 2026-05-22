@@ -254,15 +254,26 @@
             [dataIngresso]="selectedFuncionario.dataIngresso"
           ></app-employee-card>
 
-          <ion-button
-            class="dashboard-funcionarios-remove"
-            color="danger"
-            fill="outline"
-            (click)="confirmarRemocaoFuncionario()"
-          >
-            <ion-icon name="trash-outline" slot="start"></ion-icon>
-            Remover funcionário
-          </ion-button>
+          <div class="dashboard-funcionarios-actions">
+            <ion-button
+              class="dashboard-funcionarios-enroll"
+              fill="solid"
+              (click)="cadastrarRostoFuncionario()"
+            >
+              <ion-icon name="camera-outline" slot="start"></ion-icon>
+              Cadastrar rosto
+            </ion-button>
+
+            <ion-button
+              class="dashboard-funcionarios-remove"
+              color="danger"
+              fill="outline"
+              (click)="confirmarRemocaoFuncionario()"
+            >
+              <ion-icon name="trash-outline" slot="start"></ion-icon>
+              Remover funcionário
+            </ion-button>
+          </div>
         </div>
 
         <p class="dashboard-funcionarios-count" *ngIf="funcionariosFiltrados.length > 0">
@@ -308,46 +319,66 @@
           </p>
         </header>
 
-        <ion-card class="cadastro-card">
-          <ion-card-content>
-            <ion-item lines="full" class="cadastro-field">
-              <ion-label position="stacked">Nome <ion-text color="danger">*</ion-text></ion-label>
-              <ion-input
-                type="text"
-                placeholder="Nome completo"
-                [(ngModel)]="cadastroNome"
-                [disabled]="cadastroLoading"
-              ></ion-input>
-            </ion-item>
+        <ion-card class="form-card">
+          <ion-card-header class="form-card-header">
+            <div class="form-card-icon form-card-icon-primary">
+              <ion-icon name="person-add-outline"></ion-icon>
+            </div>
+            <div class="form-card-titles">
+              <ion-card-title class="form-card-title">Novo funcionário</ion-card-title>
+              <p class="form-card-subtitle">
+                Preencha os dados e clique em cadastrar.
+              </p>
+            </div>
+          </ion-card-header>
 
-            <ion-item lines="full" class="cadastro-field">
-              <ion-label position="stacked">Turno</ion-label>
-              <ion-select
-                interface="popover"
-                placeholder="Selecionar turno (opcional)"
-                [(ngModel)]="cadastroTurno"
-                [disabled]="cadastroLoading"
-              >
-                <ion-select-option [value]="null">Sem turno</ion-select-option>
-                <ion-select-option value="Manhã">Manhã</ion-select-option>
-                <ion-select-option value="Tarde">Tarde</ion-select-option>
-                <ion-select-option value="Noite">Noite</ion-select-option>
-              </ion-select>
-            </ion-item>
+          <ion-card-content class="form-card-content">
+            <ion-input
+              class="form-input"
+              fill="outline"
+              label="Nome *"
+              label-placement="stacked"
+              placeholder="Nome completo"
+              [(ngModel)]="cadastroNome"
+              [disabled]="cadastroLoading"
+            ></ion-input>
 
-            <p *ngIf="cadastroError" class="cadastro-message cadastro-error">
-              {{ cadastroError }}
+            <ion-select
+              class="form-select"
+              fill="outline"
+              label="Turno"
+              label-placement="stacked"
+              interface="popover"
+              placeholder="Selecionar turno (opcional)"
+              [(ngModel)]="cadastroTurno"
+              [disabled]="cadastroLoading"
+            >
+              <ion-select-option [value]="null">Sem turno</ion-select-option>
+              <ion-select-option value="Manhã">Manhã</ion-select-option>
+              <ion-select-option value="Tarde">Tarde</ion-select-option>
+              <ion-select-option value="Noite">Noite</ion-select-option>
+            </ion-select>
+
+            <p *ngIf="cadastroError" class="form-message form-message-error">
+              <ion-icon name="alert-circle-outline"></ion-icon>
+              <span>{{ cadastroError }}</span>
             </p>
-            <p *ngIf="cadastroSuccess" class="cadastro-message cadastro-success">
-              {{ cadastroSuccess }}
+            <p *ngIf="cadastroSuccess" class="form-message form-message-success">
+              <ion-icon name="checkmark-circle-outline"></ion-icon>
+              <span>{{ cadastroSuccess }}</span>
             </p>
 
             <ion-button
               expand="block"
-              class="cadastro-submit"
+              class="form-submit"
               (click)="submitCadastro()"
               [disabled]="cadastroLoading || !cadastroNome.trim()"
             >
+              <ion-icon
+                *ngIf="!cadastroLoading"
+                name="checkmark-outline"
+                slot="start"
+              ></ion-icon>
               {{ cadastroLoading ? 'Cadastrando...' : 'Cadastrar' }}
             </ion-button>
           </ion-card-content>
@@ -362,22 +393,35 @@
           </p>
         </header>
 
-        <ion-card class="export-card">
-          <ion-card-content>
-            <ion-item lines="full" class="cadastro-field">
-              <ion-label position="stacked">Funcionários</ion-label>
-              <ion-select
-                interface="popover"
-                multiple="true"
-                placeholder="Todos os funcionários"
-                [(ngModel)]="exportSelectedEmployees"
-                [disabled]="exportLoading"
-              >
-                <ion-select-option *ngFor="let f of funcionarios" [value]="f.id">
-                  {{ f.nome }}
-                </ion-select-option>
-              </ion-select>
-            </ion-item>
+        <ion-card class="form-card form-card-wide">
+          <ion-card-header class="form-card-header">
+            <div class="form-card-icon form-card-icon-primary">
+              <ion-icon name="download-outline"></ion-icon>
+            </div>
+            <div class="form-card-titles">
+              <ion-card-title class="form-card-title">Exportação CSV</ion-card-title>
+              <p class="form-card-subtitle">
+                Filtre por funcionário, período e quantidade.
+              </p>
+            </div>
+          </ion-card-header>
+
+          <ion-card-content class="form-card-content">
+            <ion-select
+              class="form-select"
+              fill="outline"
+              label="Funcionários"
+              label-placement="stacked"
+              interface="popover"
+              multiple="true"
+              placeholder="Todos os funcionários"
+              [(ngModel)]="exportSelectedEmployees"
+              [disabled]="exportLoading"
+            >
+              <ion-select-option *ngFor="let f of funcionarios" [value]="f.id">
+                {{ f.nome }}
+              </ion-select-option>
+            </ion-select>
 
             <div class="export-employee-actions">
               <ion-button
@@ -406,48 +450,53 @@
             </div>
 
             <div class="export-row">
-              <ion-item lines="full" class="cadastro-field export-flex">
-                <ion-label position="stacked">Início do período (opcional)</ion-label>
-                <ion-input
-                  type="datetime-local"
-                  [(ngModel)]="exportFrom"
-                  [disabled]="exportLoading"
-                ></ion-input>
-              </ion-item>
+              <ion-input
+                class="form-input export-flex"
+                fill="outline"
+                label="Início do período (opcional)"
+                label-placement="stacked"
+                type="datetime-local"
+                [(ngModel)]="exportFrom"
+                [disabled]="exportLoading"
+              ></ion-input>
 
-              <ion-item lines="full" class="cadastro-field export-flex">
-                <ion-label position="stacked">Fim do período (opcional)</ion-label>
-                <ion-input
-                  type="datetime-local"
-                  [(ngModel)]="exportTo"
-                  [disabled]="exportLoading"
-                ></ion-input>
-              </ion-item>
+              <ion-input
+                class="form-input export-flex"
+                fill="outline"
+                label="Fim do período (opcional)"
+                label-placement="stacked"
+                type="datetime-local"
+                [(ngModel)]="exportTo"
+                [disabled]="exportLoading"
+              ></ion-input>
             </div>
 
-            <ion-item lines="full" class="cadastro-field">
-              <ion-label position="stacked">Quantidade de eventos</ion-label>
-              <ion-select
-                interface="popover"
-                [(ngModel)]="exportLimit"
-                [disabled]="exportLoading"
-              >
-                <ion-select-option *ngFor="let n of exportLimitOptions" [value]="n">
-                  {{ n }} eventos
-                </ion-select-option>
-              </ion-select>
-            </ion-item>
+            <ion-select
+              class="form-select"
+              fill="outline"
+              label="Quantidade de eventos"
+              label-placement="stacked"
+              interface="popover"
+              [(ngModel)]="exportLimit"
+              [disabled]="exportLoading"
+            >
+              <ion-select-option *ngFor="let n of exportLimitOptions" [value]="n">
+                {{ n }} eventos
+              </ion-select-option>
+            </ion-select>
 
-            <p *ngIf="exportError" class="cadastro-message cadastro-error">
-              {{ exportError }}
+            <p *ngIf="exportError" class="form-message form-message-error">
+              <ion-icon name="alert-circle-outline"></ion-icon>
+              <span>{{ exportError }}</span>
             </p>
-            <p *ngIf="exportSuccess" class="cadastro-message cadastro-success">
-              {{ exportSuccess }}
+            <p *ngIf="exportSuccess" class="form-message form-message-success">
+              <ion-icon name="checkmark-circle-outline"></ion-icon>
+              <span>{{ exportSuccess }}</span>
             </p>
 
             <ion-button
               expand="block"
-              class="cadastro-submit"
+              class="form-submit"
               (click)="submitExport()"
               [disabled]="exportLoading"
             >

@@ -84,8 +84,12 @@ export class EnrollmentWizardComponent {
   /** Emitted on successful completion with the count of stored captures. */
   @Output() completed = new EventEmitter<number>();
 
-  /** Minimum captures before "Concluir" enables. */
-  static readonly MIN_CAPTURES = 3;
+  /**
+   * Minimum captures before "Concluir" enables. Zero is allowed — the
+   * admin can finish without any embeddings (e.g. dry-run for an
+   * employee whose face will be enrolled later from Funcionários).
+   */
+  static readonly MIN_CAPTURES = 0;
 
   // -------- DOM handles --------
   private readonly video =
