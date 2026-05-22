@@ -25,6 +25,27 @@ updates:
     labels:
       - dependencies
       - backend
+    # Major bumps we hold back deliberately. Patches/minors still flow.
+    #   - jsonwebtoken 10.x: requires picking a CryptoProvider feature
+    #     (`rust_crypto` / `aws_lc_rs`) — breaking change with no payoff
+    #     for our HS256 usage.
+    #   - sqlx 0.9.x: pgvector 0.4.x is wired to sqlx 0.8 and won't
+    #     unify with 0.9 in the type graph. Blocked until pgvector
+    #     ships sqlx 0.9 support upstream.
+    #   - axum 0.8.x / axum-test 16+ / utoipa-swagger-ui 9.x: tightly
+    #     coupled trio. Bumping axum requires lockstep bumps of the
+    #     other two; not a drive-by Dependabot update.
+    ignore:
+      - dependency-name: "jsonwebtoken"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlx"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "axum"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "axum-test"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "utoipa-swagger-ui"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /panel
@@ -45,6 +66,21 @@ updates:
           - "@angular/*"
           - "@angular-devkit/*"
           - "@angular-eslint/*"
+    # Major bumps we hold back deliberately. Patches/minors still flow.
+    #   - Angular majors (20 → 21+): full migration (templates, router,
+    #     SSR). Done deliberately, not on a Dependabot schedule.
+    #   - typescript majors: locked by Angular's peer-dep range
+    #     (Angular 20 requires `>=5.8 <6.0`); a TS 6 PR can't even
+    #     install.
+    ignore:
+      - dependency-name: "@angular/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@angular-devkit/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@angular-eslint/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
