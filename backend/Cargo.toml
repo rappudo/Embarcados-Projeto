@@ -21,3 +21,12 @@ anyhow = "1"
 sha2 = "0.11.0"
 pgvector = { version = "^0.3", features = ["sqlx"] }
 tower-http = { version = "^0.5", features = ["cors", "fs"] }
+
+[dev-dependencies]
+# Integration-test harness. `axum-test` spins up the router on a real
+# TCP port and gives a `reqwest`-style client. `once_cell` runs the
+# one-time DB setup (create test DB + migrations) exactly once across
+# all test files. `hex` is for SHA-256 hash assertions.
+axum-test = "15"
+once_cell = "1"
+hex = "0.4"

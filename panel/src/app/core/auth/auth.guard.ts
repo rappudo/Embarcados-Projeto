@@ -15,7 +15,9 @@ export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  if (auth.isLoggedIn()) {
+  // Use `isAuthenticated()` (not the cheap `isLoggedIn()` signal) so an
+  // expired-but-still-stored token doesn't sneak the user past the guard.
+  if (auth.isAuthenticated()) {
     return true;
   }
 

@@ -37,7 +37,17 @@ module.exports = function (config) {
     colors: true,
     logLevel: config.LOG_INFO,
     autoWatch: true,
-    browsers: ['Chrome'],
+    // ChromeHeadlessCI runs without GUI and without sandbox — required
+    // for `ng test` to work on a system that has Chromium installed but
+    // no X server (or where the sandbox would need root). Interactive
+    // `ng test --browsers=Chrome` is still available when desired.
+    customLaunchers: {
+      ChromeHeadlessCI: {
+        base: 'ChromeHeadless',
+        flags: ['--no-sandbox', '--disable-gpu'],
+      },
+    },
+    browsers: ['ChromeHeadlessCI'],
     singleRun: false,
     restartOnFileChange: true
   });

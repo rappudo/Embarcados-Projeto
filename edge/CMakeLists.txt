@@ -125,3 +125,15 @@ target_link_libraries(enroll
         facegate_storage
         facegate_vision
 )
+
+# -----------------------------------------------------------------------------
+# Testes — opt-in via -DBUILD_TESTING=ON.
+# Mantemos desligado por padrão para não atrasar o build do device, mas
+# o CI / make targets locais ativam fácil. GoogleTest é encontrado pelo
+# pacote do sistema (Arch: pacman -S gtest).
+# -----------------------------------------------------------------------------
+option(BUILD_TESTING "Build unit tests" OFF)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

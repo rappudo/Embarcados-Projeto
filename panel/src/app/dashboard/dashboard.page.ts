@@ -28,7 +28,7 @@ import { firstValueFrom } from 'rxjs';
 import { EmployeeCardComponent } from '../employee-card/employee-card.component';
 import { EmployeesService, Funcionario } from '../employees/employees.service';
 import { AnalyticsService, EventRow } from '../analytics/analytics.service';
-import { AuthService } from '../auth/auth.service';
+import { AuthService } from '../core/auth/auth.service';
 import { EnrollmentWizardComponent } from '../features/enrollment/enrollment-wizard.component';
 
 interface AcessoHoraItem {

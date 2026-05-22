@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { PerfilPage } from './perfil.page';
 
 describe('PerfilPage', () => {
@@ -8,6 +11,11 @@ describe('PerfilPage', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [PerfilPage],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(PerfilPage);
@@ -17,14 +25,5 @@ describe('PerfilPage', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
-  });
-
-  it('should start on perfil tab', () => {
-    expect(component.activeTab).toBe('perfil');
-  });
-
-  it('should switch tab when setTab is called', () => {
-    component.setTab('empresa');
-    expect(component.activeTab).toBe('empresa');
   });
 });

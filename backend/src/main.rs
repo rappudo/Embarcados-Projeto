@@ -1,13 +1,8 @@
 use anyhow::Result;
 use axum::http::{HeaderName, HeaderValue, Method, header};
+use backend::{config, db, mqtt, routes};
 use tower_http::cors::CorsLayer;
 use tracing::info;
-
-mod config;
-mod db;
-mod models;
-mod mqtt;
-mod routes;
 
 #[tokio::main]
 async fn main() -> Result<()> {

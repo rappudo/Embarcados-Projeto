@@ -130,7 +130,11 @@ async fn run_loop(pool: PgPool, mut eventloop: EventLoop, state: MqttStateHandle
     }
 }
 
-async fn handle_publish(pool: &PgPool, topic: &str, payload: &[u8]) -> anyhow::Result<()> {
+/// Persist an inbound MQTT message. Exposed (rather than module-private)
+/// so integration tests can exercise the deserialization + insertion
+/// path without needing a running broker. The signature is stable: any
+/// future fields go in the `AccessEvent` struct above.
+pub async fn handle_publish(pool: &PgPool, topic: &str, payload: &[u8]) -> anyhow::Result<()> {
     if topic == TOPIC_ACCESS {
         let evt: AccessEvent = serde_json::from_slice(payload)?;
 
