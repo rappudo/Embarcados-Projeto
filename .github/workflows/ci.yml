@@ -203,7 +203,7 @@ jobs:
             opencv onnxruntime-cpu \
             libgpiod mosquitto sqlite \
             nlohmann-json tomlplusplus gtest \
-            lcov
+            gcovr
 
       # SQLiteCpp is a thin C++ wrapper around libsqlite3. Arch ships it
       # only via AUR, which would require bootstrapping an AUR helper in
@@ -247,22 +247,25 @@ jobs:
       - name: Test
         run: ctest --test-dir edge/build --output-on-failure
 
-      # Collect coverage from the .gcda files the test run produced.
-      # --no-external skips system headers so the report only counts
-      # facegate code. --ignore-errors keeps lcov from aborting on
-      # mismatched-version warnings between gcc + lcov.
+      # gcovr is the simpler successor to lcov + genhtml for modern gcc.
+      # It parses .gcno/.gcda directly with the gcov binary, so it
+      # tracks gcc's output format without needing the lcov perl script
+      # to be in sync. Arch's rolling gcc (16.x as of this writing) is
+      # too new for the lcov in extra, which produced empty reports.
+      # We exclude:
+      #   - tests/* (we're measuring coverage OF production code, not
+      #     of the tests themselves)
+      #   - /usr/* (system headers — nlohmann_json, libstdc++ inlines)
       - name: Collect coverage
         run: |
-          lcov --capture --directory edge/build --output-file edge/coverage.info \
-            --no-external --ignore-errors mismatch,inconsistent,unused
-          # Filter out test sources — we want coverage of production code,
-          # not of the test files themselves.
-          lcov --remove edge/coverage.info '*/tests/*' '*/gtest*' \
-            --output-file edge/coverage.info \
-            --ignore-errors unused
-          lcov --summary edge/coverage.info
-          genhtml edge/coverage.info --output-directory edge/coverage-html \
-            --ignore-errors inconsistent,corrupt
+          mkdir -p edge/coverage-html
+          gcovr --root edge \
+            --filter 'edge/src/' \
+            --filter 'edge/apps/' \
+            --print-summary \
+            --html-details edge/coverage-html/index.html \
+            --lcov edge/coverage.info \
+            edge/build
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
