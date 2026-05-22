@@ -35,6 +35,6 @@ utoipa-swagger-ui = { version = "8", features = ["axum"] }
 # TCP port and gives a `reqwest`-style client. `once_cell` runs the
 # one-time DB setup (create test DB + migrations) exactly once across
 # all test files. `hex` is for SHA-256 hash assertions.
-axum-test = "15"
+axum-test = "20"
 once_cell = "1"
 hex = "0.4"
