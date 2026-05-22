@@ -10,6 +10,16 @@
 
 namespace facegate::hardware {
 
+namespace {
+
+// Passive piezo: needs an AC-like square wave to produce a tone. A static HIGH
+// just clicks on the rising/falling edge. 2.7 kHz sits near the resonant peak
+// of most small piezo discs.
+constexpr int kToneFrequencyHz = 2700;
+constexpr int kHalfPeriodUs = 1'000'000 / (kToneFrequencyHz * 2);
+
+}  // namespace
+
 struct Buzzer::Impl {
     gpiod_chip* chip = nullptr;
     gpiod_line_request* request = nullptr;
@@ -82,9 +92,16 @@ void Buzzer::beep_denied() {
         return;
     }
 
-    gpiod_line_request_set_value(impl_->request, impl_->offset, GPIOD_LINE_VALUE_ACTIVE);
-    std::this_thread::sleep_for(std::chrono::milliseconds(beep_ms_));
-    gpiod_line_request_set_value(impl_->request, impl_->offset, GPIOD_LINE_VALUE_INACTIVE);
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(beep_ms_);
+    while (std::chrono::steady_clock::now() < deadline) {
+        gpiod_line_request_set_value(
+            impl_->request, impl_->offset, GPIOD_LINE_VALUE_ACTIVE);
+        std::this_thread::sleep_for(std::chrono::microseconds(kHalfPeriodUs));
+        gpiod_line_request_set_value(
+            impl_->request, impl_->offset, GPIOD_LINE_VALUE_INACTIVE);
+        std::this_thread::sleep_for(std::chrono::microseconds(kHalfPeriodUs));
+    }
 }
 
 }  // namespace facegate::hardware
