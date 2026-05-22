@@ -211,11 +211,8 @@ export class DashboardPage implements OnInit {
   // ---------- Não reconhecidos ----------
 
   private loadUnknowns(): void {
-    console.log('[unknowns] requesting events?status=unknown&limit=200');
     this.analytics.events({ status: 'unknown', limit: 200 }).subscribe({
       next: (rows) => {
-        console.log('[unknowns] rows received:', rows.length, rows.slice(0, 3));
-
         const dayLabels: string[] = [];
         const byDay = new Map<string, number>();
         for (let i = 6; i >= 0; i--) {
@@ -225,43 +222,18 @@ export class DashboardPage implements OnInit {
           dayLabels.push(key);
           byDay.set(key, 0);
         }
-        console.log('[unknowns] dayLabels (last 7 days):', dayLabels);
 
         const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        console.log('[unknowns] cutoff ms:', cutoff, 'now ms:', Date.now());
 
         let count = 0;
-        let skippedOldCutoff = 0;
-        let skippedMissingKey = 0;
         for (const r of rows) {
-          if (r.timestamp_ms < cutoff) {
-            skippedOldCutoff++;
-            continue;
-          }
+          if (r.timestamp_ms < cutoff) continue;
           const key = this.spDayKey(r.timestamp_ms);
           if (byDay.has(key)) {
             byDay.set(key, byDay.get(key)! + 1);
             count++;
-          } else {
-            skippedMissingKey++;
-            if (skippedMissingKey <= 3) {
-              console.warn(
-                '[unknowns] key not in dayLabels:',
-                key,
-                'ts_ms:',
-                r.timestamp_ms,
-              );
-            }
           }
         }
-        console.log(
-          '[unknowns] counted:',
-          count,
-          'skipped(old):',
-          skippedOldCutoff,
-          'skipped(no-key):',
-          skippedMissingKey,
-        );
 
         this.naoRecCount = count;
         this.naoRecPorDia = dayLabels.map((dia) => ({

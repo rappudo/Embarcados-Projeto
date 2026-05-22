@@ -41,7 +41,6 @@ import { AvgDelay, HeatmapCell } from "../../core/models/analytics.model";
  * Plus a "Exportar CSV" button that pulls up to 1000 events and emits
  * a download via a Blob URL. PDF/Excel intentionally not included:
  * jspdf/exceljs would add ~1MB to the bundle for marginal demo value.
- * TODO: revisit in v2 if customers actually ask.
  */
 @Component({
   selector: "app-reports",
