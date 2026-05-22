@@ -47,8 +47,15 @@ add_library(facegate_hardware STATIC
 target_include_directories(facegate_hardware
     PUBLIC ${OpenCV_INCLUDE_DIRS} ${GPIOD_INCLUDE_DIRS}
 )
+# Only the OpenCV modules the code actually uses (cv::Mat, cv::resize,
+# cv::cvtColor, cv::VideoCapture). Avoids pulling opencv_cvv (Qt6),
+# opencv_viz (VTK), opencv_hdf (HDF5) which Arch's `opencv` package
+# ships unconditionally and the linker would otherwise demand at the
+# transitive link step.
 target_link_libraries(facegate_hardware
-    PUBLIC facegate_domain ${OpenCV_LIBS} ${GPIOD_LIBRARIES} Threads::Threads
+    PUBLIC facegate_domain
+           opencv_core opencv_imgproc opencv_videoio
+           ${GPIOD_LIBRARIES} Threads::Threads
 )
 
 add_library(facegate_storage STATIC src/storage/storage.cpp)
@@ -65,8 +72,11 @@ add_library(facegate_vision STATIC
 target_include_directories(facegate_vision
     PUBLIC ${OpenCV_INCLUDE_DIRS} ${ONNXRUNTIME_INCLUDE_DIRS}
 )
+# Same selective-link rationale as facegate_hardware above.
 target_link_libraries(facegate_vision
-    PUBLIC facegate_domain ${OpenCV_LIBS} ${ONNXRUNTIME_LIBRARIES}
+    PUBLIC facegate_domain
+           opencv_core opencv_imgproc opencv_videoio
+           ${ONNXRUNTIME_LIBRARIES}
 )
 
 add_library(facegate_mqtt STATIC
