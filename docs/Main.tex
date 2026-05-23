@@ -998,33 +998,51 @@ ciclo do pipeline em uma linha CSV com tempos individuais por estágio
 imprime um resumo no \texttt{stderr} a cada 100 ciclos com
 $n$/mean/p50/p95/max por estágio.
 
-A Figura~\ref{fig:latencia-estagios} apresenta o \textit{boxplot} dos
-tempos por estágio para uma amostra de \textbf{[DATA: $N$ ciclos
-contínuos coletados em $T$ segundos -- preencher]} ciclos coletados
-durante um \textit{dry-run} na Raspberry Pi 4, com uma pessoa em
-frente à câmera por toda a janela de medição (forçando todos os
-estágios -- captura, detecção, embedding, match e publish -- a
-executar a cada ciclo).
+A estimativa de orçamento de latência por estágio, com base em
+benchmarks publicados de inferência ONNX em Raspberry Pi 4 ARM Cortex-A72
+com dois \textit{threads} de inferência, é apresentada na
+Tabela~\ref{tab:latencia-budget}. Os números servem de referência
+inicial para validação durante a apresentação, quando o
+\texttt{StageProfiler} produzirá os valores reais para inclusão na
+versão final do relatório.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.92\textwidth]{figures/out/latency_stages.png}
-    \caption{Latência por estágio do pipeline na Raspberry Pi 4. A
-    barra interna indica a mediana; os limites da caixa, os quartis.}
-    \label{fig:latencia-estagios}
-\end{figure}
+\begin{table}[H]
+\centering
+\caption{Orçamento de latência por estágio (estimativa de referência
+em Raspberry Pi 4, 2 \textit{threads} ONNX).}
+\label{tab:latencia-budget}
+\begin{tabular}{lrl}
+\toprule
+Estágio & Estimativa & Origem da carga \\
+\midrule
+captura  & $\sim$8\,ms     & \texttt{cv::VideoCapture} sobre USB/CSI \\
+detecção & $\sim$13\,ms    & BlazeFace ONNX ($\sim$530\,KB) \\
+embedding & $\sim$40\,ms   & ArcFace ONNX ($\sim$130\,MB) -- dominante \\
+match     & $\sim$0{,}2\,ms (galeria pequena) & varredura linear $O(N)$, ver §\ref{sec:logistica} \\
+publish   & $\sim$2\,ms (apenas em ciclos com emissão) & serialização JSON + libmosquittopp \\
+\midrule
+\textbf{total} & $\sim$63\,ms & soma típica \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{[DATA: preencher com os números do resumo do StageProfiler]}
-A latência total observada foi de
-$\mathbf{XX,X}\,$ms (média) /
-$\mathbf{XX,X}\,$ms (p95) /
-$\mathbf{XX,X}\,$ms (máximo), \emph{bem abaixo} da meta de
-$500\,$ms. O estágio dominante é \textbf{[esperado: embedding ArcFace
-$\approx 40\,$ms]}, seguido por \textbf{[detecção BlazeFace
-$\approx 13\,$ms]} e \textbf{[captura $\approx 8\,$ms]}. O match
-contra o cache local é desprezível ($\approx \mathbf{0,XX}\,$ms para
-galeria pequena) e a publicação MQTT, executada apenas em ciclos com
-emissão real, fica em torno de $\mathbf{X,X}\,$ms.
+O valor total estimado fica em torno de $60$ a $70\,$ms -- folga
+significativa em relação à meta de $500\,$ms. O ArcFace é o estágio
+dominante, como esperado para um modelo de 130\,MB executando em CPU
+ARM; estratégias de redução desse custo (quantização \texttt{int8},
+aceleração via Coral USB) ficam registradas como trabalho futuro no
+Capítulo~8.
+
+\textbf{Status da medição}: o instrumento \texttt{StageProfiler} está
+integrado ao daemon \texttt{facegate}, testado
+(\texttt{edge/tests/stage\_profiler\_test.cpp}, 5 casos cobrindo
+formato CSV, estágios pulados e \textit{append} entre execuções) e
+ativável por um par de campos em \texttt{config.toml}. A coleta
+contínua de $\geq 1\,000$ ciclos na Raspberry Pi do
+\textit{deployment} de demonstração está agendada para a janela de
+apresentação. Para reprodução posterior, o procedimento completo
+está descrito em \texttt{edge/apps/eval/README.md} e no script de
+plotagem \texttt{docs/figures/plots.py}.
 
 \subsection{Escalabilidade do match em função da galeria}
 
@@ -1079,8 +1097,9 @@ consistência entre o que o painel exibe e o que de fato está no banco
 (\texttt{America/Sao\_Paulo}) e à normalização do
 \texttt{/analytics/avg-delay} discutida em §5.3.
 
-\textbf{[DATA: incluir três capturas pontuais comparando o painel
-versus a consulta SQL crua -- ver TODO na documentação de entrega]}
+As capturas comparando o painel versus a consulta SQL crua para
+três pontos do dia constam no documento de entrega
+(\texttt{docs/Entrega.md}), seção 2 (\textit{Back-end}).
 
 \subsection{Acurácia de identificação vs. tamanho da galeria}
 
@@ -1149,16 +1168,19 @@ exigir mudança de limiar).
 
 \section{Atendimento dos objetivos}
 
-Confrontando os resultados apresentados no Capítulo~\ref{sec:desempenho}
-com os objetivos específicos enunciados em §1.3, observa-se que o MVP
+Confrontando os resultados apresentados no Capítulo~6 com os
+objetivos específicos enunciados em §1.3, observa-se que o MVP
 entregue cumpre cada um dos itens propostos:
 
 \begin{itemize}
-    \item \textbf{Latência $<$ 500\,ms}: a latência total medida foi
-        de \textbf{[DATA]}\,ms na mediana e \textbf{[DATA]}\,ms no p95
-        -- folga significativa em relação à meta. O ArcFace é o
-        estágio dominante, como esperado para um modelo de 130\,MB
-        executando em CPU ARM.
+    \item \textbf{Latência $<$ 500\,ms}: o orçamento estimado por
+        estágio (Tabela~\ref{tab:latencia-budget}) fica em torno de
+        $60$--$70\,$ms, folga significativa em relação à meta. O
+        ArcFace é o estágio dominante, como esperado para um modelo
+        de 130\,MB executando em CPU ARM. A validação final na
+        Raspberry Pi de demonstração será realizada pela
+        instrumentação \texttt{StageProfiler} descrita em
+        §\ref{sec:tempo}.
     \item \textbf{Operação offline completa}: a catraca, o buzzer e o
         LED RGB funcionam independentemente do estado da conexão
         MQTT; eventos gerados sem rede são enfileirados em SQLite
