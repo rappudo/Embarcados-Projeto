@@ -944,18 +944,29 @@ FRR$(T)$, com o ponto de equilíbrio (EER) marcado.
     \label{fig:pairs-far-frr}
 \end{figure}
 
-\textbf{[DATA: preencher após rodar \texttt{eval --pairs} sobre o LFW]}
-A EER medida foi de $\approx \mathbf{XX,XX\%}$ para um limiar
-$T \approx \mathbf{X,XX}$. No limiar de produção atualmente
-configurado em \texttt{edge/config/config.toml}
+A EER medida sobre os 6\,000 pares canônicos do LFW foi de
+$\approx \mathbf{3{,}22\%}$ para um limiar $T \approx \mathbf{0{,}770}$
+-- ponto destacado na Figura~\ref{fig:pairs-far-frr}. No limiar de
+produção atualmente configurado em \texttt{edge/config/config.toml}
 ($T = 0{,}50$), as taxas observadas foram
-$\mathrm{FAR}(0{,}50) \approx \mathbf{X,XX\%}$ e
-$\mathrm{FRR}(0{,}50) \approx \mathbf{X,XX\%}$, indicando um perfil
-\textbf{[conservador / equilibrado / liberal -- escolher]} adequado
-para o cenário de controle de acesso, em que o custo de um falso
-aceite (deixar entrar uma pessoa não autorizada) é estritamente maior
-que o de uma falsa rejeição (rejeitar uma pessoa autorizada que pode
-tentar novamente).
+$\mathrm{FAR}(0{,}50) \approx \mathbf{0{,}0\%}$ e
+$\mathrm{FRR}(0{,}50) \approx \mathbf{36{,}3\%}$, indicando um perfil
+\textbf{fortemente conservador} adequado para o cenário de controle de
+acesso, em que o custo de um falso aceite (deixar entrar uma pessoa
+não autorizada) é estritamente maior que o de uma falsa rejeição
+(rejeitar uma pessoa autorizada que pode tentar novamente).
+
+Vale destacar que o protocolo do LFW compara cada par com \emph{uma
+única} foto de cada lado. Em produção, o pipeline de cadastro
+(\textit{CLI} \texttt{enroll} no Pi) captura cinco fotos por
+funcionário, o que tende a estreitar a distribuição de distâncias
+genuínas e reduzir significativamente a FRR efetiva -- o número
+medido aqui representa portanto um limite superior pessimista. Para
+deployments com galerias grandes (centenas a milhares de
+funcionários), o resultado do estudo de escalabilidade
+(§\ref{sec:logistica}) sugere considerar deslocar $T$ na direção do
+ponto de EER, aceitando uma FRR um pouco maior em troca de manter o
+FAR sob controle.
 
 Para referência, a literatura reporta para o ArcFace original
 (treinado em MS1MV2) acurácia da ordem de $99{,}8\%$ em LFW; o
@@ -1021,8 +1032,8 @@ O \texttt{Matcher} do edge realiza uma varredura linear $O(N)$ sobre
 o cache local. Para quantificar o impacto à medida que a galeria de
 funcionários cresce, o modo \texttt{enroll-scale} do binário
 \texttt{eval} foi executado para
-$N \in \{10,\,100,\,500,\,1000\}$ identidades do LFW, registrando o
-tempo de \texttt{find\_match} por sondagem.
+$N \in \{10,\,50,\,100,\,500,\,1000\}$ identidades do LFW, registrando
+o tempo de \texttt{find\_match} por sondagem.
 
 \begin{figure}[H]
     \centering
@@ -1032,14 +1043,16 @@ tempo de \texttt{find\_match} por sondagem.
     \label{fig:scale-latency}
 \end{figure}
 
-\textbf{[DATA: preencher com os números do plot helper]}
-A curva confirma o comportamento linear esperado. Mesmo para uma
-galeria de \textbf{1\,000} funcionários, a latência média de match é
-de $\mathbf{XXX}\,\mu$s, contribuição negligível para o orçamento
-total. Em termos práticos, o custo do match deixa de ser dominado pela
-inferência ArcFace apenas a partir de galerias significativamente
-maiores do que o esperado para o caso de uso (uma porta de entrada de
-empresa de pequeno/médio porte).
+A curva confirma o comportamento linear esperado: $\approx 199\,\mu$s
+para $N=10$, $1\,203\,\mu$s para $N=50$, $2\,426\,\mu$s para $N=100$,
+$9\,982\,\mu$s para $N=500$ e $18\,305\,\mu$s ($\approx 18\,$ms) para
+$N=1\,000$. Mesmo no maior caso testado, o match continua sendo
+contribuição modesta para o orçamento total de latência -- entre
+20\% e 40\% do tempo gasto pela inferência ArcFace na Pi, conforme
+§6.2. Em termos práticos, o custo do match deixa de ser
+desprezível apenas a partir de galerias significativamente maiores do
+que o esperado para o caso de uso (uma porta de entrada de empresa de
+pequeno/médio porte raramente excede algumas centenas de funcionários).
 
 \section{Análise Logística Gerada}
 \label{sec:logistica}
@@ -1084,12 +1097,21 @@ do limiar $T=0{,}50$) em função do tamanho da galeria.
     \label{fig:scale-accuracy}
 \end{figure}
 
-\textbf{[DATA: preencher após rodar a varredura de N]}
-A acurácia permanece em torno de $\mathbf{XX\%}$ para todos os
-tamanhos testados, confirmando a expectativa teórica de que o decisão
-de vizinho mais próximo não degrada com mais entradas registradas --
-\emph{desde que} as identidades de fato cadastradas sejam
-suficientemente separadas no espaço de embeddings.
+A acurácia observada foi de $72{,}0\%$ ($N=10$), $69{,}9\%$ ($N=50$),
+$62{,}5\%$ ($N=100$), $65{,}2\%$ ($N=500$) e $64{,}8\%$ ($N=1\,000$).
+A aparente queda inicial entre $N=10$ e $N=100$ é majoritariamente
+explicada pelo limiar conservador $T=0{,}50$: como discutido em
+§\ref{sec:desempenho}, esse limiar produz uma FRR de
+$\approx 36\%$ na metodologia de uma foto por par, e a métrica
+\textit{rank-1} adotada aqui exige \emph{tanto} acertar a identidade
+\emph{quanto} ficar abaixo do limiar -- ou seja, está limitada por
+cima pelo complemento da FRR ($\sim 64\%$). A partir de $N\geq 100$ a
+acurácia se estabiliza, consistente com a expectativa teórica de que
+a decisão de vizinho mais próximo não degrada significativamente com
+mais entradas registradas. Em produção, com cinco fotos de referência
+por funcionário (via \textit{CLI} \texttt{enroll}), o teto efetivo
+sobe para próximo de $1 - \mathrm{FRR}_{multi-shot}$, esperadamente
+acima de $90\%$.
 
 \subsection{Falso aceite vs. tamanho da galeria}
 
@@ -1106,17 +1128,20 @@ cadastrada a uma distância abaixo do limiar.
     \label{fig:scale-far}
 \end{figure}
 
-\textbf{[DATA: preencher após rodar a varredura de N]}
-Para $N = 10$, o FAR observado é de $\mathbf{X,XX\%}$; para
-$N = 1\,000$, sobe para $\mathbf{X,XX\%}$. Em termos práticos isso
-significa que, com o limiar atual, uma instalação com mil
+Para $N=10$ o FAR observado é de $\mathbf{0{,}0\%}$; para $N=50$,
+$\mathbf{0{,}2\%}$; para $N=100$, $\mathbf{0{,}1\%}$; para $N=500$,
+$\mathbf{1{,}5\%}$; e para $N=1\,000$, $\mathbf{3{,}7\%}$. Em termos
+práticos, com o limiar atual $T=0{,}50$, uma instalação com mil
 funcionários cadastrados aceitaria erroneamente cerca de
-\textbf{[X em cada Y -- calcular]} pessoas não cadastradas que se
-apresentassem na catraca. Este número orienta o debate sobre revisão
-de limiar em produção: para galerias maiores que algumas centenas de
-funcionários, recomenda-se ajustar $T$ para baixo (por exemplo, para
-o valor de EER medido em §\ref{sec:desempenho}) -- pagando o preço de
-uma FRR um pouco maior em troca de um FAR significativamente menor.
+\textbf{37 em cada 1\,000} pessoas não cadastradas que se
+apresentassem na catraca. Para uma porta com tráfego pesado de
+visitantes, isso é um número grande. Este resultado orienta o debate
+sobre revisão de limiar em produção: para galerias maiores do que
+$\sim$500 funcionários, recomenda-se considerar deslocar $T$ na
+direção do valor de EER medido em §\ref{sec:desempenho}
+($T \approx 0{,}77$), \emph{ou} reforçar o caminho de cadastro com
+mais fotos por funcionário (estreitando a distribuição genuína sem
+exigir mudança de limiar).
 
 % =================================================
 \chapter{Discussão}

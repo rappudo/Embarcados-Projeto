@@ -71,3 +71,4 @@ venv/
 *.synctex.gz
 *.toc
 *.run.xml
+data/
