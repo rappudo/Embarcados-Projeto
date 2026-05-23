@@ -7,15 +7,10 @@
 # Estágio 2: copia o binário pronto para uma imagem debian-slim. Não há
 # toolchain Rust no runtime — imagem final ~80 MB.
 
-FROM rust:1.78-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 WORKDIR /app
 
-# Cache de dependências: copiar manifests primeiro, criar um src vazio,
-# rodar cargo fetch. Depois copia o src real para evitar invalidar a
-# camada de deps a cada mudança de código.
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo 'fn main(){}' > src/main.rs && cargo fetch && rm -rf src
-
 COPY src ./src
 RUN cargo build --release --bin backend
 

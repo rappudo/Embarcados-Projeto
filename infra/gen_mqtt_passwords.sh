@@ -48,5 +48,8 @@ docker run --rm -v "$TMP_DIR:/work" eclipse-mosquitto:2 \
 docker run --rm -v "$TMP_DIR:/work" eclipse-mosquitto:2 \
   mosquitto_passwd    -b /work/pw "$EDGE_MQTT_USERNAME" "$EDGE_MQTT_PASSWORD"
 
-install -m 0600 "$TMP_DIR/pw" "$OUT"
-echo "[gen_mqtt_passwords] gerado $OUT (modo 0600, $(wc -l <"$OUT") usuários)"
+# 0644 (não 0600) porque o mosquitto roda como usuário não-root dentro do
+# container e precisa ler o arquivo. O conteúdo é hash PBKDF2, não segredo
+# bruto — perda de confidencialidade aceitável em troca de não usar root.
+install -m 0644 "$TMP_DIR/pw" "$OUT"
+echo "[gen_mqtt_passwords] gerado $OUT (modo 0644, $(wc -l <"$OUT") usuários)"
