@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::http::{HeaderName, HeaderValue, Method, header};
 use backend::{config, db, mqtt, routes};
 use tower_http::cors::CorsLayer;
@@ -24,18 +24,31 @@ async fn main() -> Result<()> {
     // returns quickly; we just need pool.clone() for the subscriber.
     // The returned handle exposes connection state to /system/mqtt-status,
     // and the AsyncClient lets HTTP handlers publish embedding-sync messages.
-    let (mqtt_state, mqtt_client) =
-        mqtt::start_subscriber(pool.clone(), config.mqtt_host.clone(), config.mqtt_port).await?;
+    let (mqtt_state, mqtt_client) = mqtt::start_subscriber(
+        pool.clone(),
+        config.mqtt_host.clone(),
+        config.mqtt_port,
+        config.mqtt_username.clone(),
+        config.mqtt_password.clone(),
+    )
+    .await?;
     info!("MQTT subscriber spawned");
 
-    // Configure strict CORS for the frontend (allow both localhost and
-    // 127.0.0.1 since some browsers resolve `localhost` to ::1 and the
-    // frontend may be reached via either hostname during dev).
+    // CORS allow-list from CORS_ORIGINS (.env). Defaults to the dev pair
+    // (localhost / 127.0.0.1 on :8100) when the env var is absent; on EC2
+    // it points at whatever public origin the panel is served from.
+    let origins: Vec<HeaderValue> = config
+        .cors_origins
+        .iter()
+        .map(|o| {
+            o.parse::<HeaderValue>()
+                .with_context(|| format!("CORS_ORIGINS contém valor inválido: '{}'", o))
+        })
+        .collect::<Result<_>>()?;
+    info!("CORS allow-list: {:?}", config.cors_origins);
+
     let cors = CorsLayer::new()
-        .allow_origin([
-            "http://localhost:8100".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:8100".parse::<HeaderValue>().unwrap(),
-        ])
+        .allow_origin(origins)
         .allow_methods([
             Method::GET,
             Method::POST,

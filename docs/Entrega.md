@@ -102,19 +102,43 @@ Modelos ONNX usados (não versionados — ver `README.md`):
 
 ## 2. Back-end
 
-Servidor em **Rust + Axum**, rodando junto do broker Mosquitto e do
-PostgreSQL via `docker compose`. Bind dual-stack (`[::]:3000` — IPv4 e
-IPv6) para evitar inconsistências com `localhost` em browsers.
+Servidor em **Rust + Axum**, deployado como stack completo em uma
+**instância EC2 (AWS Academy)** via `docker compose`. Quatro
+containers compõem o lado servidor; a Raspberry Pi conecta pela
+internet pública contra o broker autenticado.
 
 ```
-       MQTT                       HTTP/JSON
-edge ─────────► Mosquitto ─────► Rust (rumqttc subscriber)
-                                      │
-                                      ▼
-                                 PostgreSQL + pgvector ◄── Axum REST API ──► painel
+                ┌──────────────────────── EC2 t3.medium ────────────────────────┐
+                │                                                                │
+                │   docker network: facegate                                     │
+                │  ┌──────────┐   ┌──────────────┐   ┌────────────┐   ┌────────┐ │
+   Pi 4 ──MQTT─┼─►│ mosquitto│◄──┤ backend Rust │──►│ postgres   │   │ caddy  │ │
+   (1883, auth)│   │  :1883   │   │    :3000     │   │ + pgvector │   │  :80   │ │
+                │  └──────────┘   └──────────────┘   └────────────┘   └────┬───┘ │
+                │                       ▲                                  │     │
+                │                       └──────── reverse proxy /api/* ────┘     │
+                └──────────────────────┬──────────────────────────────┬─────────┘
+                                       │  porta 80 pública             │
+                                       ▼                               ▼
+                                  navegador (painel SPA)        operador via HTTP
 ```
 
-> Diagrama completo: ver `docs/arquitetura.png` no repositório.
+- **MQTT** (`:1883`): aberto publicamente; `allow_anonymous false` —
+  backend e Pi têm credenciais distintas no `passwordfile` do broker.
+- **Caddy** (`:80`): serve o painel Angular estático e faz reverse proxy
+  de `/api/*` para o backend, resultando em chamadas same-origin do
+  navegador (sem preflight CORS).
+- **PostgreSQL** (`:5432`): só acessível dentro da docker network.
+  Bind em `127.0.0.1:5432` no host para acesso administrativo via SSH
+  tunnel — nunca exposto à internet.
+- **JWT secret, senhas de DB e MQTT**: gerados via `openssl rand` e
+  carregados via `.env` (gitignored). Runbook completo em
+  [`infra/deploy/EC2.md`](../infra/deploy/EC2.md).
+
+> Sem TLS no MVP: AWS Academy não fornece domínio e certificados
+> Let's Encrypt exigem hostname. HTTP + MQTT autenticado é aceitável
+> para o demo; em produção real, basta adicionar `tls { ... }` ao
+> Caddyfile e o broker passa para 8883 com cert auto-emitido.
 
 **Stack:**
 
@@ -122,7 +146,7 @@ edge ─────────► Mosquitto ─────► Rust (rumqttc s
 - rumqttc 0.24 (subscriber MQTT assíncrono no runtime Tokio)
 - PostgreSQL 16 + pgvector 0.6
 - jsonwebtoken 9.x (JWT HS256)
-- Docker Compose para Postgres + Mosquitto
+- Docker Compose (Postgres, Mosquitto, backend, Caddy) — sobe inteiro com `docker compose up -d --build`
 
 **Principais endpoints REST:**
 
@@ -249,8 +273,10 @@ mapeamento DTO ↔ `Funcionario`. Executam em CI.
 | Sensor de entrada                                             | ✅     | Câmera USB/CSI (`cv::VideoCapture`)                |
 | Atuadores físicos                                             | ✅     | Servo SG90, buzzer ativo, LED RGB                  |
 | Comunicação por MQTT                                          | ✅     | 4 tópicos documentados (seção 1)                   |
+| MQTT com autenticação                                         | ✅     | `allow_anonymous false` + password_file no Mosquitto |
 | Back-end                                                      | ✅     | Rust + Axum + Docker (seção 2)                     |
 | Banco de dados                                                | ✅     | PostgreSQL 16 + pgvector 0.6                       |
+| Deploy em nuvem (EC2)                                         | ✅     | Stack docker-compose + runbook `infra/deploy/EC2.md` |
 | Front-end / dashboard                                         | ✅     | Ionic 8 + Angular 20 PWA (seção 3)                 |
 | Autenticação                                                  | ✅     | JWT HS256 + `authGuard`                            |
 | Processamento embarcado (edge inteligente)                    | ✅     | BlazeFace + ArcFace rodam on-device em C++/ONNX    |
@@ -258,7 +284,7 @@ mapeamento DTO ↔ `Funcionario`. Executam em CI.
 | Considerações de LGPD / privacidade                           | ✅     | Imagens não trafegam — só embeddings 512-d         |
 | Testes automatizados                                          | ✅     | 198 testes em CI (3 suítes)                        |
 | Documentação técnica                                          | ✅     | `Main.tex`, `README.md`, `CODE_GUIDE.md`, `DESIGN.md` |
-| Demonstração executável                                       | ✅     | Seed SQL + `docker compose up` + `ionic serve`     |
+| Demonstração executável                                       | ✅     | Seed SQL + `docker compose up -d --build`          |
 
 ---
 
@@ -268,5 +294,6 @@ mapeamento DTO ↔ `Funcionario`. Executam em CI.
 - **CI / Actions:** <https://github.com/rappudo/Embarcados-Projeto/actions>
 - **Slides:** <https://canva.link/5o6q6nqca953iau>
 - **Relatório acadêmico completo:** `docs/Main.tex` (rodar `pdflatex` duas vezes)
+- **Runbook de deploy em EC2:** [`infra/deploy/EC2.md`](../infra/deploy/EC2.md)
 - **Referência file-by-file:** `docs/CODE_GUIDE.md`
 - **Quick start completo:** `README.md`

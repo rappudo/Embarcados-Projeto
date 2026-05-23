@@ -3,6 +3,10 @@
 .env.*.local
 !.env.example
 !*.env.example
+
+# Credenciais reais do broker (gerar com infra/gen_mqtt_passwords.sh)
+infra/mosquitto_passwords
+!infra/mosquitto_passwords.example
 backend/target/
 target/
 panel/node_modules/

@@ -1,0 +1,33 @@
+# Servidor HTTP único na frente do stack.
+#
+# Rota raiz "/" serve a SPA Angular estática (com fallback para index.html
+# em rotas client-side). Rota "/api/*" faz reverse proxy para o backend
+# Rust no docker network. Assim o painel chama "/api/employees" do mesmo
+# origin, eliminando preflight CORS e dor com cookies.
+#
+# Sem TLS: AWS Academy não fornece domínio, então usamos HTTP puro.
+# Em produção real, trocar o site address por um hostname e adicionar
+# `tls { ... }` ou deixar o Caddy auto-provisionar Let's Encrypt.
+
+:80 {
+    encode gzip
+
+    # API: tira o prefixo /api e encaminha para o backend.
+    handle_path /api/* {
+        reverse_proxy backend:3000
+    }
+
+    # Tudo mais é a SPA. try_files faz o fallback para index.html
+    # quando o usuário recarrega numa rota Angular como /dashboard.
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

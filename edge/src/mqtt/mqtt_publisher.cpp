@@ -66,7 +66,9 @@ MqttPublisher::MqttPublisher(
     const std::string& client_id,
     const std::string& broker_host,
     int broker_port,
-    int keepalive_seconds
+    int keepalive_seconds,
+    const std::string& username,
+    const std::string& password
 )
     : impl_(nullptr) {
     init_mosquitto_lib_once();
@@ -83,6 +85,23 @@ MqttPublisher::MqttPublisher(
         throw std::runtime_error(
             std::string("MqttPublisher: failed to create client: ") + e.what()
         );
+    }
+
+    // username_pw_set must precede connect_async. Empty user => anonymous
+    // (local dev). On EC2 the broker rejects anonymous → we'd see rc=5
+    // in on_connect.
+    if (!username.empty()) {
+        const int rc_auth = impl_->username_pw_set(
+            username.c_str(),
+            password.empty() ? nullptr : password.c_str()
+        );
+        if (rc_auth != MOSQ_ERR_SUCCESS) {
+            delete impl_;
+            throw std::runtime_error(
+                "MqttPublisher: username_pw_set failed with code "
+                + std::to_string(rc_auth)
+            );
+        }
     }
 
     const int rc_connect = impl_->connect_async(

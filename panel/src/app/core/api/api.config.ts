@@ -1,17 +1,20 @@
+import { environment } from "../../../environments/environment";
+
 /**
  * Base URL for the Rust backend.
  *
  * Resolution order:
  *   1. `localStorage['facegate.apiBaseUrl']` — set by the settings page so
  *      a single deployed bundle can target multiple backends without rebuild.
- *   2. The default below (good for `ionic serve` against `cargo run`).
+ *   2. `environment.apiBaseUrl` — `http://127.0.0.1:3000` em dev,
+ *      `/api` em build de produção (Caddy faz reverse proxy same-origin).
  *
  * Evaluated once at module load. After saving a new value in settings
  * the page invites the user to reload — simpler than rewiring every
  * already-injected HttpClient call site.
  */
 const STORAGE_KEY = "facegate.apiBaseUrl";
-const DEFAULT_BASE_URL = "http://localhost:3000";
+const DEFAULT_BASE_URL = environment.apiBaseUrl;
 
 function resolveBaseUrl(): string {
   // `typeof window` guard so SSR / unit tests don't explode on first import.

@@ -110,6 +110,8 @@ MqttConfig parse_mqtt(const toml::table& root) {
     cfg.client_id = (*section)["client_id"].value_or("");
     cfg.keepalive_seconds = (*section)["keepalive_seconds"].value_or(60);
     cfg.heartbeat_interval_seconds = (*section)["heartbeat_interval_seconds"].value_or(30);
+    cfg.username = (*section)["username"].value_or("");
+    cfg.password = (*section)["password"].value_or("");
     return cfg;
 }
 

@@ -1,3 +1,12 @@
+# Stack completo do FaceGateway no EC2.
+#
+# Sobe Postgres + Mosquitto + backend Rust + Caddy (serve painel + reverse
+# proxy /api/*). Para o ambiente local de dev (sem backend / sem caddy) use
+# `docker compose -f docker-compose.dev.yml up`.
+#
+# Variáveis lidas de ../.env (POSTGRES_*, JWT_SECRET, MQTT_*, CORS_ORIGINS).
+# Veja .env.example para a lista completa com defaults seguros.
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -7,24 +16,79 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Bind apenas no loopback do host EC2. Acesso externo ao banco é uma
+    # péssima ideia — backend e Postgres compartilham docker network, então
+    # backend resolve "postgres" via DNS interno e nada além sai pro mundo.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: facegate-broker
     restart: unless-stopped
     ports:
+      # 1883 exposto publicamente — a Pi precisa conectar pela internet.
+      # Auth é obrigatória (allow_anonymous false + password_file).
       - "1883:1883"
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto_passwords:/mosquitto/config/passwordfile:ro
       - mqttdata:/mosquitto/data
       - mqttlogs:/mosquitto/log
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: facegate-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    environment:
+      # DATABASE_URL aponta pro hostname do serviço Postgres no docker network.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      SERVER_PORT: 3000
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    expose:
+      - "3000"
+
+  caddy:
+    build:
+      context: ../panel
+      dockerfile: Dockerfile
+    container_name: facegate-caddy
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # Porta 80 é o único endpoint público de HTTP. SPA estática + reverse
+      # proxy /api/* → backend:3000. Trocar para 443 + tls quando houver
+      # domínio.
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
 
 volumes:
   pgdata:
   mqttdata:
   mqttlogs:
+  caddydata:
+  caddyconfig:

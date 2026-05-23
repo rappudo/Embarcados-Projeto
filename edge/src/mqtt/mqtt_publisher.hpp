@@ -13,7 +13,9 @@ public:
         const std::string& client_id,
         const std::string& broker_host,
         int broker_port,
-        int keepalive_seconds
+        int keepalive_seconds,
+        const std::string& username = "",
+        const std::string& password = ""
     );
     ~MqttPublisher();
 

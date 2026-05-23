@@ -112,6 +112,13 @@ keepalive_seconds = 60
 # Intervalo entre heartbeats publicados no tópico facegate/health.
 heartbeat_interval_seconds = 30
 
+# Credenciais MQTT (opcional). Deixe ambos vazios para conectar anonimamente
+# (útil em dev local com broker sem auth). Em produção com broker exposto
+# pela internet (EC2, nuvem), preencha os dois — o broker rejeita conexões
+# anônimas e o daemon falha com rc=5 ("not authorized") em on_connect.
+username = ""
+password = ""
+
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------

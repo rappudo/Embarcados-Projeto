@@ -21,7 +21,9 @@ public:
         int broker_port,
         int keepalive_seconds,
         facegate::storage::Storage& storage,
-        facegate::vision::Matcher& matcher
+        facegate::vision::Matcher& matcher,
+        const std::string& username = "",
+        const std::string& password = ""
     );
     ~MqttSubscriber();
 

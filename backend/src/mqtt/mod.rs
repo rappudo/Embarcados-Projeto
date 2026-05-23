@@ -74,6 +74,8 @@ pub async fn start_subscriber(
     pool: PgPool,
     host: String,
     port: u16,
+    username: Option<String>,
+    password: Option<String>,
 ) -> anyhow::Result<(MqttStateHandle, AsyncClient)> {
     let mut opts = MqttOptions::new(CLIENT_ID, &host, port);
     opts.set_keep_alive(Duration::from_secs(30));
@@ -81,6 +83,13 @@ pub async fn start_subscriber(
     // subscription and queues QoS-1 messages while the backend is offline.
     // This is what makes the "no event lost" guarantee real.
     opts.set_clean_session(false);
+
+    // Auth is opt-in: if MQTT_USERNAME/MQTT_PASSWORD are unset, connect
+    // anonymously (matches local dev). On EC2 the broker rejects anonymous
+    // connections, so both vars must be present in the deploy env.
+    if let (Some(u), Some(p)) = (username, password) {
+        opts.set_credentials(u, p);
+    }
 
     let (client, eventloop) = AsyncClient::new(opts, 32);
 

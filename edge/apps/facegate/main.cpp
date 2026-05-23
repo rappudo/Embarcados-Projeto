@@ -145,7 +145,9 @@ int main(int argc, char** argv) {
             cfg.mqtt.client_id,
             cfg.mqtt.broker_host,
             cfg.mqtt.broker_port,
-            cfg.mqtt.keepalive_seconds
+            cfg.mqtt.keepalive_seconds,
+            cfg.mqtt.username,
+            cfg.mqtt.password
         );
 
         // The subscriber needs a distinct client_id from the publisher —
@@ -157,7 +159,9 @@ int main(int argc, char** argv) {
             cfg.mqtt.broker_port,
             cfg.mqtt.keepalive_seconds,
             storage,
-            matcher
+            matcher,
+            cfg.mqtt.username,
+            cfg.mqtt.password
         );
 
         install_signal_handlers();

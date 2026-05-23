@@ -182,7 +182,9 @@ MqttSubscriber::MqttSubscriber(
     int broker_port,
     int keepalive_seconds,
     facegate::storage::Storage& storage,
-    facegate::vision::Matcher& matcher
+    facegate::vision::Matcher& matcher,
+    const std::string& username,
+    const std::string& password
 )
     : impl_(nullptr) {
     init_mosquitto_lib_once();
@@ -200,6 +202,20 @@ MqttSubscriber::MqttSubscriber(
         throw std::runtime_error(
             std::string("MqttSubscriber: failed to create client: ") + e.what()
         );
+    }
+
+    if (!username.empty()) {
+        const int rc_auth = impl_->username_pw_set(
+            username.c_str(),
+            password.empty() ? nullptr : password.c_str()
+        );
+        if (rc_auth != MOSQ_ERR_SUCCESS) {
+            delete impl_;
+            throw std::runtime_error(
+                "MqttSubscriber: username_pw_set failed with code "
+                + std::to_string(rc_auth)
+            );
+        }
     }
 
     const int rc_connect = impl_->connect_async(

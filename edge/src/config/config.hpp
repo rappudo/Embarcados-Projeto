@@ -48,6 +48,11 @@ struct MqttConfig {
     std::string client_id;
     int keepalive_seconds;
     int heartbeat_interval_seconds;
+    // Optional broker credentials. Empty means anonymous (local dev / tests).
+    // EC2 broker requires both; if either is missing the daemon falls back to
+    // anonymous and the broker rejects the connection at handshake time.
+    std::string username;
+    std::string password;
 };
 
 struct LoggingConfig {
