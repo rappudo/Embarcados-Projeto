@@ -1,6 +1,10 @@
 #include "mqtt/mqtt_subscriber.hpp"
 
-#include <mosquitto/libmosquittopp.h>
+#if __has_include(<mosquitto/libmosquittopp.h>)
+#  include <mosquitto/libmosquittopp.h>
+#else
+#  include <mosquittopp.h>
+#endif
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
