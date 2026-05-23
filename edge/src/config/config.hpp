@@ -54,6 +54,13 @@ struct LoggingConfig {
     std::string level;
 };
 
+struct MetricsConfig {
+    // Empty path disables CSV logging. summary_interval_cycles <= 0 disables
+    // the periodic stderr digest. Both off by default — opt-in for benchmarks.
+    std::string csv_path;
+    int summary_interval_cycles;
+};
+
 struct Config {
     std::string device_id;
     VisionConfig vision;
@@ -63,6 +70,7 @@ struct Config {
     StorageConfig storage;
     MqttConfig mqtt;
     LoggingConfig logging;
+    MetricsConfig metrics;
 };
 
 Config load_config(const std::filesystem::path& path);

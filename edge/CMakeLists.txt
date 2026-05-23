@@ -98,6 +98,7 @@ target_link_libraries(facegate_mqtt
 )
 add_library(facegate_pipeline STATIC
     src/pipeline/pipeline.cpp
+    src/pipeline/stage_profiler.cpp
 )
 target_link_libraries(facegate_pipeline
     PUBLIC
@@ -134,6 +135,20 @@ target_link_libraries(enroll
         facegate_hardware
         facegate_storage
         facegate_vision
+)
+
+# -----------------------------------------------------------------------------
+# App: eval — offline FAR/FRR + scale benchmark harness (no camera, no GPIO).
+# Reads JPEGs from a public face dataset (e.g. LFW), reuses facegate_vision
+# so preprocessing matches the edge exactly. See edge/apps/eval/README.md.
+# -----------------------------------------------------------------------------
+add_executable(eval apps/eval/main.cpp)
+target_include_directories(eval PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(eval
+    PRIVATE
+        facegate_domain
+        facegate_vision
+        opencv_core opencv_imgcodecs
 )
 
 # -----------------------------------------------------------------------------

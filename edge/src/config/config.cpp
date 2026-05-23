@@ -18,6 +18,7 @@ RecognitionConfig parse_recognition(const toml::table& root);
 StorageConfig parse_storage(const toml::table& root);
 MqttConfig parse_mqtt(const toml::table& root);
 LoggingConfig parse_logging(const toml::table& root);
+MetricsConfig parse_metrics(const toml::table& root);
 
 void validate(const Config& cfg);
 
@@ -120,6 +121,21 @@ LoggingConfig parse_logging(const toml::table& root) {
 
     LoggingConfig cfg;
     cfg.level = (*section)["level"].value_or("info");
+    return cfg;
+}
+
+MetricsConfig parse_metrics(const toml::table& root) {
+    MetricsConfig cfg;
+    // [metrics] is optional — both fields default to disabled.
+    const auto* section = root["metrics"].as_table();
+    if (section) {
+        cfg.csv_path = (*section)["csv_path"].value_or("");
+        cfg.summary_interval_cycles =
+            (*section)["summary_interval_cycles"].value_or(0);
+    } else {
+        cfg.csv_path = "";
+        cfg.summary_interval_cycles = 0;
+    }
     return cfg;
 }
 
@@ -246,6 +262,7 @@ Config load_config(const std::filesystem::path& path) {
     cfg.storage = parse_storage(root);
     cfg.mqtt = parse_mqtt(root);
     cfg.logging = parse_logging(root);
+    cfg.metrics = parse_metrics(root);
 
     validate(cfg);
     return cfg;

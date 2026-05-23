@@ -119,3 +119,19 @@ heartbeat_interval_seconds = 30
 # Níveis aceitos: trace, debug, info, warn, error.
 # Em produção: "info". Em desenvolvimento/debug: "debug" ou "trace".
 level = "info"
+
+# -----------------------------------------------------------------------------
+# Métricas — instrumentação opcional do pipeline para benchmarks de latência.
+# Seção inteira é opcional; valores omitidos (ou csv_path vazio +
+# summary_interval_cycles = 0) deixam a coleta totalmente desligada.
+# -----------------------------------------------------------------------------
+[metrics]
+# Caminho para o CSV onde cada ciclo do pipeline grava uma linha com
+# capture_us, detect_us, embed_us, match_us, publish_us e total_us.
+# Estágios que não rodaram no ciclo (ex: sem rosto → embed/match vazios)
+# saem como células vazias. Vazio aqui desliga o arquivo.
+csv_path = ""
+
+# A cada N ciclos, imprime um resumo no stderr com n/mean/p50/p95/max por
+# estágio em milissegundos. <= 0 desliga o resumo periódico.
+summary_interval_cycles = 0

@@ -288,19 +288,19 @@ facegate/
 
 ## Testes automatizados
 
-**193 testes**, cobrindo as três camadas. Tudo roda em CI no GitHub Actions em cada push/PR — ver badge no topo deste README ou a aba *Actions*.
+**198 testes**, cobrindo as três camadas. Tudo roda em CI no GitHub Actions em cada push/PR — ver badge no topo deste README ou a aba *Actions*.
 
 | Camada  | Testes | Stack                                  | Comando                                                                                  |
 | ------- | ------:| -------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Backend | 66     | Rust integration tests + Postgres real | `cd backend && DATABASE_URL=... cargo test -- --test-threads=1`                          |
 | Painel  | 88     | Jasmine + Karma + Chromium headless    | `cd panel && CHROME_BIN=/usr/bin/chromium npm test -- --watch=false --browsers=ChromeHeadlessCI` |
-| Edge    | 39     | GoogleTest + ctest                     | `cd edge && cmake -S . -B build -DBUILD_TESTING=ON && cmake --build build && ctest --test-dir build` |
+| Edge    | 44     | GoogleTest + ctest                     | `cd edge && cmake -S . -B build -DBUILD_TESTING=ON && cmake --build build && ctest --test-dir build` |
 
 ### O que cada suíte cobre
 
 - **Backend** (`backend/tests/`): JWT (login + expiry + secret mismatch), CRUD de funcionários, criação de usuários (incluindo duplicate-email 409), embeddings (round-trip lossless 512-d + 404 em FK violation + cascade), handler MQTT (insert, validações, drops silenciosos), todos os 6 endpoints de analytics (incluindo a normalização do `avg-delay` para `noite` cruzando a meia-noite).
 - **Painel** (`panel/src/app/`): `AuthService` (signal + expiry check), interceptor (Bearer attach, 401 → logout, sessão local expirada), guard, todos os serviços de `core/api`, mapeamento DTO ↔ `Funcionario`, `LoginPage` (success, 401, network error, double-submit guard, mensagens pt-BR).
-- **Edge** (`edge/tests/`): cosine matcher (boundary do threshold, upsert insert/replace, guard de norma zero), serialização MQTT (contrato de JSON em sync com o backend), cache SQLite (round-trip de BLOB com todos 512 floats, fila offline FIFO), parser TOML (campos obrigatórios, ranges válidos, GPIO pin uniqueness).
+- **Edge** (`edge/tests/`): cosine matcher (boundary do threshold, upsert insert/replace, guard de norma zero), serialização MQTT (contrato de JSON em sync com o backend), cache SQLite (round-trip de BLOB com todos 512 floats, fila offline FIFO), parser TOML (campos obrigatórios, ranges válidos, GPIO pin uniqueness), profiler de latência por estágio (formato CSV, células vazias para estágios pulados, append entre runs).
 
 ### Coverage
 

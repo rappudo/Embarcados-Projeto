@@ -178,7 +178,9 @@ int main(int argc, char** argv) {
             cfg.recognition.idle_reset_seconds,
             cfg.recognition.unknown_throttle_seconds,
             cfg.gpio.servo_open_ms,
-            cfg.recognition.denied_cooldown_ms
+            cfg.recognition.denied_cooldown_ms,
+            cfg.metrics.csv_path,
+            cfg.metrics.summary_interval_cycles
         );
 
         while (!g_stop_requested.load()) {

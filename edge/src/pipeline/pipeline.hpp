@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -15,6 +16,8 @@ namespace facegate::storage  { class Storage; }
 namespace facegate::mqtt     { class MqttPublisher; }
 
 namespace facegate::pipeline {
+
+class StageProfiler;
 
 class Pipeline {
 public:
@@ -33,7 +36,9 @@ public:
         int idle_reset_seconds,
         int unknown_throttle_seconds,
         int open_hold_ms,
-        int denied_cooldown_ms
+        int denied_cooldown_ms,
+        std::string metrics_csv_path,
+        int metrics_summary_interval_cycles
     );
     ~Pipeline();
 
@@ -72,6 +77,8 @@ private:
 
     std::thread main_thread_;
     std::thread auxiliary_thread_;
+
+    std::unique_ptr<StageProfiler> profiler_;
 };
 
 }  // namespace facegate::pipeline

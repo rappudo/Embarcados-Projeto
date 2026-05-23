@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -19,6 +20,7 @@
 #include "mqtt/mqtt_publisher.hpp"
 #include "mqtt/serialization.hpp"
 #include "domain/domain.hpp"
+#include "pipeline/stage_profiler.hpp"
 
 namespace facegate::pipeline {
 
@@ -37,7 +39,9 @@ Pipeline::Pipeline(
     int idle_reset_seconds,
     int unknown_throttle_seconds,
     int open_hold_ms,
-    int denied_cooldown_ms
+    int denied_cooldown_ms,
+    std::string metrics_csv_path,
+    int metrics_summary_interval_cycles
 )
     : camera_(camera),
       detector_(detector),
@@ -54,6 +58,11 @@ Pipeline::Pipeline(
       unknown_throttle_(unknown_throttle_seconds),
       open_hold_(open_hold_ms),
       denied_cooldown_(denied_cooldown_ms) {
+    if (!metrics_csv_path.empty() || metrics_summary_interval_cycles > 0) {
+        profiler_ = std::make_unique<StageProfiler>(
+            std::move(metrics_csv_path), metrics_summary_interval_cycles
+        );
+    }
     try {
         main_thread_ = std::thread(&Pipeline::main_loop, this);
         auxiliary_thread_ = std::thread(&Pipeline::auxiliary_loop, this);
@@ -114,6 +123,8 @@ void try_publish_or_enqueue(
 
 void Pipeline::main_loop() {
     using steady = std::chrono::steady_clock;
+    using std::chrono::duration_cast;
+    using std::chrono::microseconds;
 
     // Dedup state. We run at ~30 fps so without this the system would emit
     // ~180 events/min for someone standing in front of the camera. Instead we
@@ -139,7 +150,9 @@ void Pipeline::main_loop() {
             continue;
         }
 
+        const auto t_capture_start = steady::now();
         auto frame_opt = camera_.capture();
+        const auto t_capture_end = steady::now();
         if (!frame_opt) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
@@ -147,13 +160,23 @@ void Pipeline::main_loop() {
 
         const cv::Mat& frame = *frame_opt;
 
+        CycleSample sample{};
+        sample.capture = duration_cast<microseconds>(t_capture_end - t_capture_start);
+
+        const auto t_detect_start = steady::now();
         auto detection_opt = detector_.detect_best(frame);
+        const auto t_detect_end = steady::now();
+        sample.detect = duration_cast<microseconds>(t_detect_end - t_detect_start);
         if (!detection_opt) {
+            if (profiler_) profiler_->record(sample);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
 
+        const auto t_embed_start = steady::now();
         auto embedding_opt = embedder_.extract(frame, *detection_opt);
+        const auto t_embed_end = steady::now();
+        sample.embed = duration_cast<microseconds>(t_embed_end - t_embed_start);
         if (!embedding_opt) {
             facegate::domain::DeviceFault fault;
             fault.timestamp = now();
@@ -163,11 +186,15 @@ void Pipeline::main_loop() {
             auto msg = facegate::mqtt::serialize(fault, device_id_);
             try_publish_or_enqueue(publisher_, storage_, msg);
 
+            if (profiler_) profiler_->record(sample);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
 
+        const auto t_match_start = steady::now();
         auto match_result = matcher_.find_match(*embedding_opt);
+        const auto t_match_end = steady::now();
+        sample.match = duration_cast<microseconds>(t_match_end - t_match_start);
 
         const auto current = steady::now();
         const bool face_was_absent =
@@ -246,9 +273,14 @@ void Pipeline::main_loop() {
         ever_seen_face = true;
 
         if (should_emit) {
+            const auto t_publish_start = steady::now();
             auto msg = facegate::mqtt::serialize(event);
             try_publish_or_enqueue(publisher_, storage_, msg);
+            const auto t_publish_end = steady::now();
+            sample.publish = duration_cast<microseconds>(t_publish_end - t_publish_start);
         }
+
+        if (profiler_) profiler_->record(sample);
     }
 }
 
