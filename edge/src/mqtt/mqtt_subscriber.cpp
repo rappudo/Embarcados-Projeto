@@ -65,7 +65,11 @@ struct MqttSubscriber::Impl : public mosqpp::mosquittopp {
          facegate::vision::Matcher& matcher_ref,
          const std::string& host,
          int port)
-        : mosqpp::mosquittopp(client_id, /*clean_session=*/false),
+        // clean_session=true: the broker stores backend upserts with retain=true,
+        // so subscribing fully re-syncs the current embedding state. A persistent
+        // session would *also* queue those same messages and re-deliver them on
+        // reconnect — duplicate work for every embedding at startup.
+        : mosqpp::mosquittopp(client_id, /*clean_session=*/true),
           connected_flag(connected_flag_ptr),
           storage(storage_ref),
           matcher(matcher_ref),

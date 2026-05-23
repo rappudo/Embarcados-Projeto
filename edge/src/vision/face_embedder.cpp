@@ -2,7 +2,6 @@
 
 #include <opencv2/imgproc.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <vector>
@@ -17,6 +16,46 @@ namespace {
 constexpr int kArcFaceInputSize = 112;
 constexpr float kNormMean = 127.5f;
 constexpr float kNormScale = 128.0f;
+
+// InsightFace canonical 5-point landmarks for a 112x112 crop. We use only
+// the two eye positions to solve a closed-form similarity transform
+// (rotation + uniform scale + translation), which avoids linking
+// opencv_calib3d for estimateAffinePartial2D.
+constexpr float kCanonicalRightEyeX = 38.2946f;
+constexpr float kCanonicalRightEyeY = 51.6963f;
+constexpr float kCanonicalLeftEyeX  = 73.5318f;
+constexpr float kCanonicalLeftEyeY  = 51.5014f;
+
+// MediaPipe BlazeFace 6-keypoint order: 0=subject right eye (image-left),
+// 1=subject left eye (image-right), 2=nose, 3=mouth, 4/5=ears. Matches
+// InsightFace's "right_eye"/"left_eye" naming (subject-relative).
+constexpr std::size_t kRightEyeIdx = 0;
+constexpr std::size_t kLeftEyeIdx  = 1;
+
+cv::Mat similarity_transform_from_eyes(const Keypoints& kps) {
+    const float sx0 = kps[kRightEyeIdx].x;
+    const float sy0 = kps[kRightEyeIdx].y;
+    const float sx1 = kps[kLeftEyeIdx].x;
+    const float sy1 = kps[kLeftEyeIdx].y;
+
+    const float dx = sx1 - sx0;
+    const float dy = sy1 - sy0;
+    const float norm_sq = dx * dx + dy * dy;
+    if (norm_sq < 1e-6f) {
+        return {};
+    }
+
+    const float Dx = kCanonicalLeftEyeX - kCanonicalRightEyeX;
+    const float Dy = kCanonicalLeftEyeY - kCanonicalRightEyeY;
+
+    const float a = (dx * Dx + dy * Dy) / norm_sq;
+    const float b = (dx * Dy - dy * Dx) / norm_sq;
+
+    const float tx = kCanonicalRightEyeX - (a * sx0 - b * sy0);
+    const float ty = kCanonicalRightEyeY - (b * sx0 + a * sy0);
+
+    return (cv::Mat_<float>(2, 3) << a, -b, tx, b, a, ty);
+}
 
 }  // namespace
 
@@ -41,32 +80,27 @@ std::optional<facegate::domain::EmbeddingVector> FaceEmbedder::extract(
     const cv::Mat& frame_bgr,
     const Detection& detection
 ) {
-    const int frame_w = frame_bgr.cols;
-    const int frame_h = frame_bgr.rows;
+    if (detection.bbox.width < 10.0f || detection.bbox.height < 10.0f) {
+        std::cerr << "FaceEmbedder: bbox too small: w=" << detection.bbox.width
+                  << " h=" << detection.bbox.height << "\n";
+        return std::nullopt;
+    }
 
-    const int x = std::clamp(static_cast<int>(detection.bbox.x), 0, frame_w - 1);
-    const int y = std::clamp(static_cast<int>(detection.bbox.y), 0, frame_h - 1);
-    const int w = std::clamp(
-        static_cast<int>(detection.bbox.width), 1, frame_w - x
+    const cv::Mat M = similarity_transform_from_eyes(detection.keypoints);
+    if (M.empty()) {
+        std::cerr << "FaceEmbedder: degenerate eye keypoints, skipping\n";
+        return std::nullopt;
+    }
+
+    cv::Mat face_aligned;
+    cv::warpAffine(
+        frame_bgr, face_aligned, M,
+        cv::Size(kArcFaceInputSize, kArcFaceInputSize),
+        cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0)
     );
-    const int h = std::clamp(
-        static_cast<int>(detection.bbox.height), 1, frame_h - y
-    );
-
-    if (w < 10 || h < 10) {
-            std::cerr << "FaceEmbedder: bbox too small: w=" << w << " h=" << h << "\n";
-            return std::nullopt;
-        }
-
-    const cv::Rect roi(x, y, w, h);
-    cv::Mat face_bgr = frame_bgr(roi);
-
-    cv::Mat face_resized;
-    cv::resize(face_bgr, face_resized,
-               cv::Size(kArcFaceInputSize, kArcFaceInputSize));
 
     cv::Mat face_rgb;
-    cv::cvtColor(face_resized, face_rgb, cv::COLOR_BGR2RGB);
+    cv::cvtColor(face_aligned, face_rgb, cv::COLOR_BGR2RGB);
 
     std::vector<float> input_tensor(
         3 * kArcFaceInputSize * kArcFaceInputSize

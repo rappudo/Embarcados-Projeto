@@ -13,11 +13,51 @@ const FLOATS_PER_DETECTION = 16;
 
 ort.env.wasm.wasmPaths = "/assets/ort/";
 
-interface BBox {
+// InsightFace canonical landmark positions for a 112x112 ArcFace input.
+// Only the two eye positions are used — a closed-form similarity transform
+// is enough to align rotation + scale + translation.
+const CANONICAL_RIGHT_EYE = { x: 38.2946, y: 51.6963 };
+const CANONICAL_LEFT_EYE = { x: 73.5318, y: 51.5014 };
+
+interface Point {
   x: number;
   y: number;
+}
+
+interface Detection {
   width: number;
   height: number;
+  rightEye: Point;
+  leftEye: Point;
+}
+
+interface Similarity2D {
+  a: number;
+  b: number;
+  tx: number;
+  ty: number;
+}
+
+/**
+ * Closed-form similarity transform (rotation + uniform scale + translation)
+ * mapping the two detected eye points onto the InsightFace canonical eye
+ * positions. The full 2x3 matrix is [a -b tx; b a ty].
+ */
+function similarityFromEyes(srcRight: Point, srcLeft: Point): Similarity2D | null {
+  const dx = srcLeft.x - srcRight.x;
+  const dy = srcLeft.y - srcRight.y;
+  const normSq = dx * dx + dy * dy;
+  if (normSq < 1e-6) return null;
+
+  const Dx = CANONICAL_LEFT_EYE.x - CANONICAL_RIGHT_EYE.x;
+  const Dy = CANONICAL_LEFT_EYE.y - CANONICAL_RIGHT_EYE.y;
+
+  const a = (dx * Dx + dy * Dy) / normSq;
+  const b = (dx * Dy - dy * Dx) / normSq;
+  const tx = CANONICAL_RIGHT_EYE.x - (a * srcRight.x - b * srcRight.y);
+  const ty = CANONICAL_RIGHT_EYE.y - (b * srcRight.x + a * srcRight.y);
+
+  return { a, b, tx, ty };
 }
 
 /**
@@ -48,10 +88,10 @@ export class FaceEmbeddingService {
     const detector = await this.detector();
     const embedder = await this.embedder();
 
-    const bbox = await this.detect(detector, source);
-    if (!bbox) return null;
+    const detection = await this.detect(detector, source);
+    if (!detection) return null;
 
-    return this.embed(embedder, source, bbox);
+    return this.embed(embedder, source, detection);
   }
 
   private detector(): Promise<ort.InferenceSession> {
@@ -77,7 +117,7 @@ export class FaceEmbeddingService {
   private async detect(
     session: ort.InferenceSession,
     source: HTMLCanvasElement,
-  ): Promise<BBox | null> {
+  ): Promise<Detection | null> {
     const work = document.createElement("canvas");
     work.width = BLAZE_INPUT_SIZE;
     work.height = BLAZE_INPUT_SIZE;
@@ -126,37 +166,47 @@ export class FaceEmbeddingService {
     if (numDetections === 0) return null;
 
     // BlazeFace returns normalized coords. Detections come pre-sorted
-    // by confidence after NMS, so [0..16] is the best face.
+    // by confidence after NMS, so [0..16] is the best face. Layout is
+    // [x1, y1, x2, y2, kp0_x, kp0_y, kp1_x, kp1_y, ...] — keypoint order
+    // follows MediaPipe: 0=right eye (subject), 1=left eye, 2=nose, ...
     const x1 = flat[0] * source.width;
     const y1 = flat[1] * source.height;
     const x2 = flat[2] * source.width;
     const y2 = flat[3] * source.height;
 
     return {
-      x: x1,
-      y: y1,
       width: x2 - x1,
       height: y2 - y1,
+      rightEye: { x: flat[4] * source.width, y: flat[5] * source.height },
+      leftEye: { x: flat[6] * source.width, y: flat[7] * source.height },
     };
   }
 
   private async embed(
     session: ort.InferenceSession,
     source: HTMLCanvasElement,
-    bbox: BBox,
+    detection: Detection,
   ): Promise<Float32Array | null> {
-    const sx = Math.max(0, Math.min(source.width - 1, Math.round(bbox.x)));
-    const sy = Math.max(0, Math.min(source.height - 1, Math.round(bbox.y)));
-    const sw = Math.max(1, Math.min(source.width - sx, Math.round(bbox.width)));
-    const sh = Math.max(1, Math.min(source.height - sy, Math.round(bbox.height)));
-    if (sw < 10 || sh < 10) return null;
+    if (detection.width < 10 || detection.height < 10) return null;
+
+    const transform = similarityFromEyes(detection.rightEye, detection.leftEye);
+    if (!transform) return null;
 
     const work = document.createElement("canvas");
     work.width = ARC_INPUT_SIZE;
     work.height = ARC_INPUT_SIZE;
     const ctx = work.getContext("2d");
     if (!ctx) return null;
-    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, ARC_INPUT_SIZE, ARC_INPUT_SIZE);
+    // Black background — pixels outside the warped source must not leak
+    // alpha-undefined RGB into the ArcFace input tensor.
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, ARC_INPUT_SIZE, ARC_INPUT_SIZE);
+    // Canvas setTransform(a, b, c, d, e, f) ⇔ matrix [a c e; b d f].
+    // Our 2x3 similarity is [a -b tx; b a ty] ⇒ setTransform(a, b, -b, a, tx, ty).
+    const { a, b, tx, ty } = transform;
+    ctx.setTransform(a, b, -b, a, tx, ty);
+    ctx.drawImage(source, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     const { data } = ctx.getImageData(0, 0, ARC_INPUT_SIZE, ARC_INPUT_SIZE);
 
     // NHWC float32, RGB normalized as (p - 127.5) / 128, matching the edge.
