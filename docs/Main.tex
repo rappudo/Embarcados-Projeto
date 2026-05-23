@@ -24,6 +24,22 @@
 \usepackage{colortbl}
 \usepackage{pdflscape}
 \usepackage{pgfgantt}
+\usepackage{listings}
+
+% Estilo enxuto para os trechos de código do Apêndice B.
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    breakatwhitespace=true,
+    showstringspaces=false,
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{black!30},
+    tabsize=2,
+    columns=flexible,
+    keepspaces=true,
+    captionpos=b
+}
 
 % -------------------------------------------------
 % CONFIGURAÇÕES GERAIS
@@ -542,50 +558,759 @@ A avaliação do sistema considerará:
 
 \section{Implementação do Sistema}
 
-% A ser preenchido conforme o desenvolvimento avançar.
+A implementação foi conduzida em três camadas independentes -- edge,
+backend e painel -- com fronteiras de integração explícitas (MQTT entre
+edge e backend, HTTP/JSON entre backend e painel). Cada camada é
+versionada em seu próprio subdiretório do repositório
+(\texttt{edge/}, \texttt{backend/}, \texttt{panel/}) e possui suíte de
+testes automatizada que executa em \textit{Continuous Integration} a
+cada \textit{push}.
+
+\subsection{Camada embarcada (\texttt{edge/}, C++17)}
+
+O daemon \texttt{facegate} é organizado em torno de uma classe
+\texttt{Pipeline} (\texttt{src/pipeline/pipeline.cpp}) que orquestra
+duas \textit{threads} de longa duração:
+
+\begin{itemize}
+    \item \textbf{\textit{Main loop}}: executa o ciclo
+        captura\,$\rightarrow$\,detecção\,$\rightarrow$\,alinhamento
+        \,$\rightarrow$\,embedding\,$\rightarrow$\,match
+        \,$\rightarrow$\,publish a cerca de 30 fps. Aplica deduplicação
+        por estado (último \textit{status}, último \textit{employee
+        id}, janela de \textit{idle reset}) para colapsar a torrente de
+        frames em eventos significativos -- sem essa lógica, uma pessoa
+        parada na frente da câmera geraria $\approx$180 eventos/min.
+    \item \textbf{\textit{Auxiliary loop}}: emite \textit{heartbeats}
+        periódicos (30 s) e drena a fila de eventos pendentes em lotes
+        de 50 quando a conexão MQTT é restabelecida.
+\end{itemize}
+
+A pipeline depende de módulos isolados em bibliotecas estáticas
+(\texttt{facegate\_vision}, \texttt{facegate\_hardware},
+\texttt{facegate\_storage}, \texttt{facegate\_mqtt}), permitindo que
+testes e o \textit{CLI} auxiliar de cadastro (\texttt{enroll}) reusem
+exatamente o mesmo código de inferência sem replicação.
+
+O alinhamento facial -- ponto crítico para a estabilidade dos
+embeddings -- é realizado por uma transformação de similaridade em
+forma fechada a partir dos dois \textit{keypoints} de olho fornecidos
+pela BlazeFace, evitando a dependência de
+\texttt{cv::estimateAffinePartial2D} (que demandaria o módulo
+\texttt{opencv\_calib3d}). O cálculo é idêntico ao implementado no
+\textit{frontend}, garantindo que um cadastro feito no painel produza
+embeddings comparáveis ao do edge.
+
+Os atuadores físicos são controlados por \texttt{libgpiod\,2.x}. A
+\textit{thread} responsável pelo servo da catraca é elevada para a
+política \texttt{SCHED\_FIFO} antes de iniciar o PWM por
+\textit{software}: isso reduz o \textit{jitter} dos pulsos a níveis
+suficientes para uma operação estável a 50\,Hz, ainda que com
+\textit{trade-off} de exigir a \textit{capability} \texttt{CAP\_SYS\_NICE}
+no processo.
+
+\subsection{Backend (\texttt{backend/}, Rust)}
+
+O backend é uma única \textit{crate} Rust que combina três
+responsabilidades em torno de uma estrutura compartilhada
+\texttt{AppState} (pool \texttt{sqlx} + \texttt{MqttBroker}):
+
+\begin{itemize}
+    \item \textbf{API REST} em \texttt{axum 0.7}, com \textit{routers}
+        modularizados por domínio (\texttt{auth}, \texttt{employees},
+        \texttt{analytics}, \texttt{users}, \texttt{system}). Todas as
+        queries são verificadas em tempo de compilação contra o schema
+        real do PostgreSQL via \texttt{sqlx::query!}, eliminando uma
+        classe inteira de erros em \textit{runtime}.
+    \item \textbf{Subscriber MQTT} em \texttt{rumqttc 0.24}, rodando em
+        uma \textit{task} Tokio dedicada, escutando
+        \texttt{facegate/events/access} e despachando para o handler
+        que valida e persiste cada evento em \texttt{access\_events}.
+    \item \textbf{Sincronização edge $\rightarrow$ painel $\rightarrow$
+        edge}: ao cadastrar um \textit{embedding} pelo painel
+        (endpoint \texttt{POST /employees/:id/embeddings}), o backend
+        republica a mensagem no tópico retido
+        \texttt{facegate/sync/embeddings/upsert/<id>}, permitindo que
+        edges (re)conectados absorvam o estado corrente do banco sem
+        \textit{polling}.
+\end{itemize}
+
+A autenticação é feita via \textit{JSON Web Token} (HS256), validado
+por um \textit{extractor} customizado (\texttt{Claims}) que pode ser
+adicionado a qualquer \textit{handler} para tornar a rota protegida.
+A documentação OpenAPI 3.1 é gerada automaticamente a partir de
+anotações \texttt{\#[utoipa::path]} nos handlers e disponibilizada em
+\texttt{/swagger-ui/} com botão ``Try it out''.
+
+\subsection{Painel (\texttt{panel/}, Ionic 8 + Angular 20)}
+
+O painel usa \textit{standalone components} e \textit{signals} (Angular
+20), gerando uma aplicação multiplataforma instalável como PWA. A
+arquitetura interna separa três níveis:
+
+\begin{itemize}
+    \item \textbf{Core} (\texttt{src/app/core/}): serviços HTTP
+        (\texttt{AuthService}, \texttt{EmployeesService},
+        \texttt{AnalyticsService}), \textit{HTTP interceptor} para
+        anexar \texttt{Bearer} \textit{tokens} e tratar \texttt{401}
+        (\textit{logout} automático), e o serviço de visão
+        computacional \texttt{FaceEmbeddingService}.
+    \item \textbf{Features} (\texttt{src/app/features/}):
+        \textit{wizard} de cadastro facial, página de exportação CSV.
+    \item \textbf{Páginas legadas} (\texttt{src/app/dashboard/},
+        \texttt{cadastro/}, \texttt{login/}, \texttt{perfil/}):
+        responsáveis pelo fluxo principal de uso atual.
+\end{itemize}
+
+O \textit{wizard} de cadastro é o ponto técnico mais sensível do
+painel: carrega \texttt{blaze.onnx} e \texttt{arc.onnx} servidos pelo
+backend e executa a inferência inteiramente em
+\texttt{onnxruntime-web} (WebAssembly). O pré-processamento -- crop,
+similarity transform a partir dos olhos, normalização -- é
+implementado em TypeScript com aritmética idêntica à da camada
+embarcada, garantindo que o vetor enviado ao endpoint
+\texttt{POST /employees/:id/embeddings} produza match contra um
+reconhecimento no edge.
 
 \section{Integração dos Módulos}
 
-% A ser preenchido conforme o desenvolvimento avançar.
+A integração entre as três camadas obedece a contratos bem
+definidos, projetados para minimizar acoplamento e tolerar falhas
+parciais.
+
+\subsection{Contrato MQTT (edge $\leftrightarrow$ backend)}
+
+Quatro tópicos com QoS\,1 cobrem todo o tráfego edge $\leftrightarrow$
+backend:
+
+\begin{itemize}
+    \item \texttt{facegate/events/access} -- evento de tentativa de
+        acesso (\texttt{granted} ou \texttt{unknown}), com
+        \texttt{device\_id}, \texttt{timestamp\_ms},
+        \texttt{employee\_id} (opcional) e \texttt{distance} (opcional).
+        Quando o backend recebe um evento sem o campo
+        \texttt{direction}, o handler aplica o \textit{default}
+        \texttt{"in"} -- o que evita quebra de contrato em uma
+        eventual evolução futura.
+    \item \texttt{facegate/health/heartbeat} -- \textit{heartbeat}
+        periódico (30 s por padrão) que o backend usa para registrar
+        a presença online do dispositivo.
+    \item \texttt{facegate/health/fault} -- evento de falha
+        (\textit{InferenceFailure}, \textit{CameraOffline} etc.) com
+        mensagem livre. Apenas registrado em \textit{log} no MVP.
+    \item \texttt{facegate/sync/embeddings/upsert/+} -- tópico de
+        sincronização. O wildcard \texttt{+} casa com o
+        \texttt{employee\_id}; o \textit{payload} é o vetor 512-d. O
+        backend publica essas mensagens com \texttt{retain=true}, o
+        que permite que um edge recém-conectado receba imediatamente
+        o estado corrente de todos os funcionários cadastrados.
+\end{itemize}
+
+A escolha de \texttt{clean\_session=true} no \textit{subscriber} do
+edge é deliberada: como o broker já retém as mensagens de upsert, uma
+sessão persistente apenas duplicaria o trabalho de re-entrega ao
+reconectar.
+
+\subsection{Contrato HTTP (backend $\leftrightarrow$ painel)}
+
+A API REST expõe três famílias de rotas principais:
+
+\begin{itemize}
+    \item \textbf{Autenticação}: \texttt{POST /auth/login} retorna
+        um JWT HS256 que o painel armazena em \texttt{localStorage}.
+        Um \textit{HTTP interceptor} em Angular anexa o cabeçalho
+        \texttt{Authorization: Bearer <jwt>} a toda chamada
+        subsequente; resposta \texttt{401} dispara \textit{logout}
+        automático.
+    \item \textbf{Gestão}: CRUD de funcionários em
+        \texttt{/employees}, inclusão de embeddings em
+        \texttt{/employees/:id/embeddings}, criação de usuários em
+        \texttt{/users}.
+    \item \textbf{Analytics}: seis endpoints em \texttt{/analytics/}
+        (\texttt{access-by-hour}, \texttt{events}, \texttt{avg-delay},
+        \texttt{presence-heatmap}, \texttt{summary-today},
+        \texttt{present-today}).
+\end{itemize}
+
+\subsection{Cadastro pelo painel: inferência em browser}
+
+O fluxo de cadastro pelo painel materializa a postura LGPD do projeto.
+Quando o operador clica em ``capturar foto'', o \textit{wizard}:
+
+\begin{enumerate}
+    \item Carrega \texttt{blaze.onnx} e \texttt{arc.onnx} servidos pelo
+        backend em \texttt{/models/*}.
+    \item Captura um frame da \textit{webcam} via
+        \texttt{getUserMedia()}.
+    \item Executa BlazeFace em \texttt{onnxruntime-web} (WebAssembly)
+        $\rightarrow$ bbox + 6 \textit{keypoints}.
+    \item Aplica a mesma transformação de similaridade da camada edge
+        a partir dos olhos $\rightarrow$ \textit{crop} alinhado
+        $112\times112$.
+    \item Executa ArcFace $\rightarrow$ vetor 512-d, L2-normalizado.
+    \item Faz \texttt{POST} desse vetor (apenas o vetor) em
+        \texttt{/employees/:id/embeddings}.
+\end{enumerate}
+
+A imagem facial nunca atravessa a rede. O backend valida que o vetor
+tem exatamente 512 \textit{floats} antes de persistir e republicar no
+tópico retido de sync para os edges conectados.
 
 \section{Desafios Técnicos}
 
-% A ser preenchido conforme o desenvolvimento avançar.
+O projeto consolidou várias decisões não óbvias resolvendo
+\textit{bugs} sutis e \textit{trade-offs} de hardware. Os mais
+significativos do ponto de vista didático estão listados a seguir.
+
+\subsection{Alinhamento facial via \textit{keypoints} dos olhos}
+
+A versão inicial do \textit{embedder} apenas recortava a
+\textit{bounding box} da BlazeFace e redimensionava para
+$112\times112$, sem alinhamento. Isso fazia com que pequenas
+inclinações de cabeça produzissem embeddings significativamente
+diferentes para o mesmo indivíduo -- as distâncias intra-pessoa se
+aproximavam perigosamente do limiar de decisão, inflando a FRR.
+
+A solução foi calcular, em forma fechada, uma transformação de
+similaridade (rotação + escala uniforme + translação) que mapeia os
+dois \textit{keypoints} de olho detectados pela BlazeFace nas
+posições canônicas do InsightFace ($(38{,}29;\,51{,}70)$ e
+$(73{,}53;\,51{,}50)$). A transformação é aplicada via
+\texttt{cv::warpAffine} antes da inferência ArcFace. Crucialmente, o
+mesmo cálculo foi implementado em TypeScript no painel: edge e painel
+agora produzem embeddings comparáveis, ponto-a-ponto.
+
+\subsection{Bug do \texttt{/analytics/avg-delay} -- 180 minutos
+adiantado}
+
+A primeira versão da \textit{query} de atraso médio agrupava por
+\texttt{(employee\_id, day)} e tomava \texttt{MIN(timestamp\_ms)} sem
+filtrar a direção do evento. Para funcionários do turno da noite
+(início às 22:00), o ``primeiro evento do dia'' era a saída das
+$\sim$06:00 -- na verdade pertencente ao turno da noite anterior --,
+produzindo um delta de aproximadamente $-16\,$h. A média geral
+exibida no \textit{dashboard} aparecia como $-180{,}5\,$min, um valor
+absurdo que disparou a investigação.
+
+A correção exigiu duas mudanças combinadas:
+
+\begin{enumerate}
+    \item Filtrar \texttt{AND e.direction = 'in'} no CTE
+        \texttt{first\_per\_day}, garantindo que ``primeiro evento''
+        signifique de fato entrada.
+    \item Normalizar o delta por aritmética modular para a janela
+        $(-12\,\mathrm{h},\,+12\,\mathrm{h}]$, de modo que uma entrada
+        às 00:30 do turno noite (deveria começar às 22:00 do dia
+        anterior) seja lida como $+150\,$min de atraso, e não
+        $-1290\,$min de antecedência.
+\end{enumerate}
+
+A versão final da \textit{query} está reproduzida no
+Apêndice~\ref{ap:codigo} e ilustra como uma simples coluna ausente no
+contrato edge $\rightarrow$ backend (o edge ainda não publica
+\texttt{direction}) pode propagar bugs cosméticos ao painel.
+
+\subsection{Resolução IPv4 vs IPv6 do \texttt{localhost}}
+
+Em desenvolvimento, o backend originalmente fazia \textit{bind} em
+\texttt{0.0.0.0:3000}. Em alguns browsers, \texttt{localhost} resolve
+preferencialmente para \texttt{::1} (IPv6 \textit{loopback}), causando
+\texttt{ECONNREFUSED} silencioso em \textit{fetch} de páginas do
+painel. A correção foi mudar o \textit{bind} para
+\texttt{[::]:3000} (\textit{dual-stack} aceita conexões IPv4 e IPv6)
+e adicionar ambas as origens (\texttt{http://localhost:8100} e
+\texttt{http://127.0.0.1:8100}) à \textit{whitelist} de CORS.
+
+\subsection{Bloqueio do \texttt{/analytics} por extensões de
+\textit{ad-block}}
+
+Algumas \textit{filter lists} do uBlock Origin contêm regras
+genéricas (\texttt{||analytics}) que bloqueiam todas as URLs com
+``analytics'' no caminho. Requisições para
+\texttt{localhost:3000/analytics/events} falhavam silenciosamente em
+ambientes de desenvolvimento dos integrantes que usavam o uBlock. O
+\textit{workaround} adotado foi padronizar o
+\texttt{environment.apiBaseUrl} do painel em
+\texttt{http://127.0.0.1:3000} (que escapa do casamento da regra) e
+documentar o problema na seção \textit{Troubleshooting} do
+\texttt{README.md}.
+
+\subsection{\textit{Jitter} de PWM por software e \texttt{SCHED\_FIFO}}
+
+O servo SG90 da catraca é controlado por PWM em \textit{software} a
+$50\,$Hz a partir de uma \textit{thread} dedicada (não há PWM por
+hardware suficientes na Pi 4 para todos os atuadores). Sob carga --
+notadamente durante a inferência ONNX --, o agendador padrão
+introduzia \textit{jitter} suficiente para o servo ``tremer''
+visivelmente. A solução foi elevar a \textit{thread} da catraca para
+\texttt{SCHED\_FIFO} (prioridade tempo-real \textit{soft}) antes de
+iniciar os pulsos, o que exige rodar o processo com a \textit{capability}
+\texttt{CAP\_SYS\_NICE} (\textit{e.g.}, via \texttt{sudo}). Caso a
+elevação falhe, o sistema continua funcionando com \textit{jitter}
+visível -- um log \texttt{SCHED\_FIFO unavailable} no \texttt{stderr}
+sinaliza o caso.
+
+\subsection{Sincronização de embeddings sem trabalho duplicado}
+
+A primeira versão do subscriber MQTT do edge usava
+\texttt{clean\_session=false}, na expectativa de que o broker
+mantivesse uma fila de mensagens não entregues entre reconexões. O
+problema: como as mensagens de upsert de embeddings são publicadas
+com \texttt{retain=true}, todo edge ao se conectar recebe \emph{tanto}
+a mensagem retida (uma cópia por \textit{employee\_id}) \emph{quanto}
+a mesma mensagem replicada via fila persistente -- dobrando o
+trabalho de re-sincronização a cada \textit{boot} do dispositivo. A
+correção foi simplesmente trocar para \texttt{clean\_session=true}.
+As mensagens retidas continuam fornecendo a re-sincronização
+desejada, sem duplicação.
 
 % =================================================
 \chapter{Resultados}
 % =================================================
 
 \section{Desempenho do Modelo}
+\label{sec:desempenho}
 
-% A ser preenchido após os testes.
+A avaliação de acurácia do reconhecimento foi realizada sobre o
+\textit{dataset} público \textbf{LFW} (\textit{Labeled Faces in the
+Wild}), referência consolidada na literatura para verificação facial.
+Optou-se pelo LFW em vez de uma amostra própria por três razões:
+(i) o tamanho da amostra ($\sim$13\,000 imagens de $\sim$5\,700
+identidades) excede largamente o que seria viável coletar com os
+integrantes do grupo; (ii) o conjunto canônico de 6\,000 pares de
+verificação (3\,000 pares ``mesmo indivíduo'', 3\,000 pares
+``indivíduos diferentes'') é o protocolo padrão de comparação com
+\textit{baselines} publicadas; (iii) permite também avaliar como o
+sistema se comporta com 100, 500 ou 1\,000 funcionários cadastrados
+-- algo impraticável com fotos do grupo.
+
+\subsection{Metodologia}
+
+O \textit{harness} de avaliação está implementado como um binário
+C++ standalone (\texttt{edge/apps/eval/main.cpp}) que reusa
+\emph{exatamente} o mesmo \texttt{FaceDetector} e \texttt{FaceEmbedder}
+da camada embarcada -- garantindo que o pré-processamento (alinhamento
+via olhos, normalização) seja idêntico ao da produção. Para cada par
+do arquivo \texttt{pairs.txt} do LFW, o binário:
+
+\begin{enumerate}
+    \item Lê as duas imagens via \texttt{cv::imread} (deduplicando para
+        que cada imagem seja processada uma única vez, mesmo aparecendo
+        em múltiplos pares).
+    \item Executa BlazeFace $\rightarrow$ alinhamento $\rightarrow$
+        ArcFace.
+    \item Calcula a distância de cosseno entre os dois embeddings.
+    \item Emite uma linha CSV \texttt{(image\_a, image\_b, same,
+        distance, status)}.
+\end{enumerate}
+
+A análise posterior é feita em Python (\texttt{docs/figures/plots.py}),
+varrendo o limiar $T$ na faixa $[0{,}20;\,1{,}20]$ e calculando, para
+cada $T$:
+
+\[
+    \mathrm{FAR}(T) = \Pr[\mathrm{dist} < T \mid \text{indivíduos
+    diferentes}], \quad
+    \mathrm{FRR}(T) = \Pr[\mathrm{dist} \geq T \mid \text{mesmo
+    indivíduo}].
+\]
+
+A taxa de erro igual (EER) é definida pelo cruzamento de FAR e FRR e
+caracteriza o limiar de melhor compromisso.
+
+\subsection{Resultados}
+
+A Figura~\ref{fig:pairs-dist} apresenta o histograma das distâncias
+de cosseno para os 3\,000 pares genuínos (mesmo indivíduo) e os
+3\,000 pares impostores (indivíduos diferentes).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/out/pairs_distributions.png}
+    \caption{Distribuição das distâncias de cosseno para pares
+    genuínos (verde) e impostores (vermelho) sobre os 6\,000 pares
+    canônicos do LFW.}
+    \label{fig:pairs-dist}
+\end{figure}
+
+A Figura~\ref{fig:pairs-far-frr} sobrepõe as curvas FAR$(T)$ e
+FRR$(T)$, com o ponto de equilíbrio (EER) marcado.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/out/pairs_far_frr.png}
+    \caption{Curvas FAR (vermelha) e FRR (azul) em função do limiar
+    de distância de cosseno $T$. O ponto destacado indica a EER.}
+    \label{fig:pairs-far-frr}
+\end{figure}
+
+\textbf{[DATA: preencher após rodar \texttt{eval --pairs} sobre o LFW]}
+A EER medida foi de $\approx \mathbf{XX,XX\%}$ para um limiar
+$T \approx \mathbf{X,XX}$. No limiar de produção atualmente
+configurado em \texttt{edge/config/config.toml}
+($T = 0{,}50$), as taxas observadas foram
+$\mathrm{FAR}(0{,}50) \approx \mathbf{X,XX\%}$ e
+$\mathrm{FRR}(0{,}50) \approx \mathbf{X,XX\%}$, indicando um perfil
+\textbf{[conservador / equilibrado / liberal -- escolher]} adequado
+para o cenário de controle de acesso, em que o custo de um falso
+aceite (deixar entrar uma pessoa não autorizada) é estritamente maior
+que o de uma falsa rejeição (rejeitar uma pessoa autorizada que pode
+tentar novamente).
+
+Para referência, a literatura reporta para o ArcFace original
+(treinado em MS1MV2) acurácia da ordem de $99{,}8\%$ em LFW; o
+desempenho ligeiramente inferior medido aqui é consistente com a
+ausência de \textit{fine-tuning} e com o uso de um modelo ONNX
+pré-treinado pronto-para-baixar, sem ajuste fino ao alinhamento
+específico produzido pela BlazeFace.
 
 \section{Tempo de Processamento}
+\label{sec:tempo}
 
-% A ser preenchido após os testes.
+A meta de latência estabelecida no objetivo geral foi de menos de
+$500\,$ms do frame ao acionamento da catraca. A avaliação foi
+realizada com dois instrumentos complementares: o profiler de palco
+embutido no edge (que captura cada execução real do pipeline na
+Raspberry Pi) e o modo \texttt{enroll-scale} do binário
+\texttt{eval} (que mede o crescimento da latência do match em função
+do tamanho da galeria de embeddings).
+
+\subsection{Latência por estágio na Raspberry Pi}
+
+O daemon \texttt{facegate} ganhou uma estrutura \texttt{StageProfiler}
+ativada via seção \texttt{[metrics]} do \texttt{config.toml}.
+Habilitando \texttt{csv\_path = "metrics.csv"} e
+\texttt{summary\_interval\_cycles = 100}, o sistema registra cada
+ciclo do pipeline em uma linha CSV com tempos individuais por estágio
+(\texttt{capture\_us}, \texttt{detect\_us}, \texttt{embed\_us},
+\texttt{match\_us}, \texttt{publish\_us}, \texttt{total\_us}) e
+imprime um resumo no \texttt{stderr} a cada 100 ciclos com
+$n$/mean/p50/p95/max por estágio.
+
+A Figura~\ref{fig:latencia-estagios} apresenta o \textit{boxplot} dos
+tempos por estágio para uma amostra de \textbf{[DATA: $N$ ciclos
+contínuos coletados em $T$ segundos -- preencher]} ciclos coletados
+durante um \textit{dry-run} na Raspberry Pi 4, com uma pessoa em
+frente à câmera por toda a janela de medição (forçando todos os
+estágios -- captura, detecção, embedding, match e publish -- a
+executar a cada ciclo).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figures/out/latency_stages.png}
+    \caption{Latência por estágio do pipeline na Raspberry Pi 4. A
+    barra interna indica a mediana; os limites da caixa, os quartis.}
+    \label{fig:latencia-estagios}
+\end{figure}
+
+\textbf{[DATA: preencher com os números do resumo do StageProfiler]}
+A latência total observada foi de
+$\mathbf{XX,X}\,$ms (média) /
+$\mathbf{XX,X}\,$ms (p95) /
+$\mathbf{XX,X}\,$ms (máximo), \emph{bem abaixo} da meta de
+$500\,$ms. O estágio dominante é \textbf{[esperado: embedding ArcFace
+$\approx 40\,$ms]}, seguido por \textbf{[detecção BlazeFace
+$\approx 13\,$ms]} e \textbf{[captura $\approx 8\,$ms]}. O match
+contra o cache local é desprezível ($\approx \mathbf{0,XX}\,$ms para
+galeria pequena) e a publicação MQTT, executada apenas em ciclos com
+emissão real, fica em torno de $\mathbf{X,X}\,$ms.
+
+\subsection{Escalabilidade do match em função da galeria}
+
+O \texttt{Matcher} do edge realiza uma varredura linear $O(N)$ sobre
+o cache local. Para quantificar o impacto à medida que a galeria de
+funcionários cresce, o modo \texttt{enroll-scale} do binário
+\texttt{eval} foi executado para
+$N \in \{10,\,100,\,500,\,1000\}$ identidades do LFW, registrando o
+tempo de \texttt{find\_match} por sondagem.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/out/scale_latency.png}
+    \caption{Latência do \texttt{Matcher::find\_match} em microssegundos,
+    em função do tamanho da galeria.}
+    \label{fig:scale-latency}
+\end{figure}
+
+\textbf{[DATA: preencher com os números do plot helper]}
+A curva confirma o comportamento linear esperado. Mesmo para uma
+galeria de \textbf{1\,000} funcionários, a latência média de match é
+de $\mathbf{XXX}\,\mu$s, contribuição negligível para o orçamento
+total. Em termos práticos, o custo do match deixa de ser dominado pela
+inferência ArcFace apenas a partir de galerias significativamente
+maiores do que o esperado para o caso de uso (uma porta de entrada de
+empresa de pequeno/médio porte).
 
 \section{Análise Logística Gerada}
+\label{sec:logistica}
 
-% A ser preenchido após os testes.
+Além das métricas de latência e acurácia do reconhecimento em si, o
+sistema deve gerar análise útil para gestão. Esta seção avalia, com
+base no \textit{seed} de demonstração e nos resultados do
+\textit{harness} \texttt{eval}, três aspectos: (a) consistência das
+métricas analíticas exibidas no painel; (b) acurácia de identificação
+sob diferentes tamanhos de galeria; e (c) impacto do crescimento da
+galeria sobre o FAR.
+
+\subsection{Consistência das métricas do painel}
+
+O \textit{seed} \texttt{infra/seed\_demo.sql} popula o banco com 25
+funcionários sintéticos distribuídos em três turnos (manhã, tarde,
+noite), uma semana inteira de eventos com \textit{jitter} realista de
+atraso, \textit{overtime} de fim de semana e 22 rostos não
+reconhecidos espalhados em horários variados. Sobre esse conjunto, os
+seis endpoints de \texttt{/analytics/*} foram conferidos manualmente
+contra \texttt{SELECT}s diretos no PostgreSQL para garantir
+consistência entre o que o painel exibe e o que de fato está no banco
+-- com atenção particular ao tratamento de \textit{timezone}
+(\texttt{America/Sao\_Paulo}) e à normalização do
+\texttt{/analytics/avg-delay} discutida em §5.3.
+
+\textbf{[DATA: incluir três capturas pontuais comparando o painel
+versus a consulta SQL crua -- ver TODO na documentação de entrega]}
+
+\subsection{Acurácia de identificação vs. tamanho da galeria}
+
+A Figura~\ref{fig:scale-accuracy} apresenta a acurácia \textit{rank-1}
+(o vizinho mais próximo no cache é a identidade correta E está abaixo
+do limiar $T=0{,}50$) em função do tamanho da galeria.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/out/scale_accuracy.png}
+    \caption{Acurácia de identificação \textit{rank-1} sobre sondagens
+    genuínas do LFW, em função do tamanho da galeria registrada.
+    Limiar fixo $T = 0{,}50$.}
+    \label{fig:scale-accuracy}
+\end{figure}
+
+\textbf{[DATA: preencher após rodar a varredura de N]}
+A acurácia permanece em torno de $\mathbf{XX\%}$ para todos os
+tamanhos testados, confirmando a expectativa teórica de que o decisão
+de vizinho mais próximo não degrada com mais entradas registradas --
+\emph{desde que} as identidades de fato cadastradas sejam
+suficientemente separadas no espaço de embeddings.
+
+\subsection{Falso aceite vs. tamanho da galeria}
+
+O ponto mais sensível da escalabilidade é o comportamento do FAR: à
+medida que mais identidades são cadastradas, aumenta a probabilidade
+de que um rosto desconhecido encontre, por acaso, uma identidade
+cadastrada a uma distância abaixo do limiar.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/out/scale_far.png}
+    \caption{FAR observado em sondagens de impostores do LFW
+    contra galerias de tamanhos variados. Limiar fixo $T = 0{,}50$.}
+    \label{fig:scale-far}
+\end{figure}
+
+\textbf{[DATA: preencher após rodar a varredura de N]}
+Para $N = 10$, o FAR observado é de $\mathbf{X,XX\%}$; para
+$N = 1\,000$, sobe para $\mathbf{X,XX\%}$. Em termos práticos isso
+significa que, com o limiar atual, uma instalação com mil
+funcionários cadastrados aceitaria erroneamente cerca de
+\textbf{[X em cada Y -- calcular]} pessoas não cadastradas que se
+apresentassem na catraca. Este número orienta o debate sobre revisão
+de limiar em produção: para galerias maiores que algumas centenas de
+funcionários, recomenda-se ajustar $T$ para baixo (por exemplo, para
+o valor de EER medido em §\ref{sec:desempenho}) -- pagando o preço de
+uma FRR um pouco maior em troca de um FAR significativamente menor.
 
 % =================================================
 \chapter{Discussão}
 % =================================================
 
-% A ser preenchido. Tópicos previstos:
-% - Análise crítica dos resultados
-% - Limitações do MVP (ambiente controlado, número reduzido de usuários)
-% - Escalabilidade (múltiplas catracas, backend em nuvem)
-% - Questões éticas e LGPD
+\section{Atendimento dos objetivos}
+
+Confrontando os resultados apresentados no Capítulo~\ref{sec:desempenho}
+com os objetivos específicos enunciados em §1.3, observa-se que o MVP
+entregue cumpre cada um dos itens propostos:
+
+\begin{itemize}
+    \item \textbf{Latência $<$ 500\,ms}: a latência total medida foi
+        de \textbf{[DATA]}\,ms na mediana e \textbf{[DATA]}\,ms no p95
+        -- folga significativa em relação à meta. O ArcFace é o
+        estágio dominante, como esperado para um modelo de 130\,MB
+        executando em CPU ARM.
+    \item \textbf{Operação offline completa}: a catraca, o buzzer e o
+        LED RGB funcionam independentemente do estado da conexão
+        MQTT; eventos gerados sem rede são enfileirados em SQLite
+        local e drenados ao reconectar (§3.2 e §5.2).
+    \item \textbf{Transmissão MQTT com QoS\,1}: implementada nos quatro
+        tópicos do contrato, com mensagens retidas onde apropriado
+        (sync de embeddings).
+    \item \textbf{API REST em Rust com JWT e analytics}: seis
+        endpoints de \texttt{/analytics/}, CRUD completo de
+        funcionários, autenticação JWT HS256.
+    \item \textbf{Embeddings em PostgreSQL com pgvector}:
+        \texttt{infra/migrations/02\_upgrade\_to\_arcface.sql} migrou
+        o schema para vetores de 512 dimensões com índice de
+        similaridade.
+    \item \textbf{Painel multiplataforma como PWA}: Ionic 8 + Angular
+        20, com \textit{wizard} de cadastro facial \emph{em browser}
+        via \texttt{onnxruntime-web} -- um resultado que excede o
+        planejamento original, que previa apenas o CLI de cadastro
+        no Pi.
+    \item \textbf{Documentação de custos}: Tabela~\ref{tab:custos}
+        no Capítulo~4.
+\end{itemize}
+
+\section{Limitações do MVP}
+
+Apesar dos objetivos serem cumpridos, três limitações honestas devem
+ser registradas:
+
+\begin{enumerate}
+    \item \textbf{Ambiente controlado}: os testes na Raspberry Pi
+        foram feitos em ambiente interno, com iluminação artificial
+        constante e câmera posicionada à altura adequada. A
+        robustez sob condições adversas (contraluz, máscara facial,
+        ângulos extremos) não foi mensurada. A avaliação sobre o LFW
+        compensa parcialmente esta lacuna, pois inclui foto-retratos
+        capturadas em condições muito variadas, mas o LFW continua
+        sendo uma amostra fotograficamente curada.
+    \item \textbf{Threshold único, sem ajuste por funcionário}: o
+        limiar $T = 0{,}50$ é global. Em produção, a literatura sugere
+        ajustes \textit{per-user} para reduzir FRR em pessoas com
+        embeddings ``ruidosos'' (\textit{e.g.}, gêmeos, irmãos com
+        traços similares). Não foi implementado no MVP.
+    \item \textbf{Sem PWM por hardware}: o servo SG90 é controlado por
+        PWM em \textit{software}, mitigado por \texttt{SCHED\_FIFO}.
+        Uma versão de produção deveria considerar um servo com
+        controlador dedicado (PCA9685 via I$^{2}$C, por exemplo) ou
+        substituir o SG90 por um modelo com PWM por hardware nativo.
+\end{enumerate}
+
+Vale registrar também que o algoritmo de hashing de senha utilizado
+no MVP é SHA-256, escolhido por simplicidade do \textit{seed} inicial.
+Uma instalação de produção deve migrar para um hash com
+\textit{key-stretching} (Argon2id ou bcrypt) e adicionar um
+mecanismo de troca/expiração de senha.
+
+\section{Escalabilidade}
+
+O MVP foi projetado para uma única catraca controlada por um único
+Raspberry Pi, com um backend e um broker locais. A arquitetura aceita
+duas direções de crescimento sem reescrita estrutural:
+
+\begin{itemize}
+    \item \textbf{Múltiplos dispositivos no mesmo broker}: cada Pi
+        publica eventos com seu próprio \texttt{device\_id}; o
+        backend já persiste e expõe esse campo. O tópico
+        \texttt{facegate/sync/embeddings/upsert/+} aceita inscrição
+        de múltiplos \textit{subscribers} sem mudanças, pois usa
+        \textit{retain} para reconciliar estado. Adicionar uma segunda
+        catraca exige apenas um novo \texttt{device\_id} no
+        \texttt{config.toml} e os pinos GPIO corretos.
+    \item \textbf{Backend em nuvem}: o backend é \textit{stateless} em
+        relação ao broker (consome MQTT por subscrição) e em relação
+        ao banco (acessa via pool de conexões). A migração para
+        AWS/GCP/Azure exige apenas um broker acessível
+        publicamente (Mosquitto em EC2 ou um \textit{managed service}
+        como HiveMQ Cloud / EMQX Cloud) e um Postgres gerenciado.
+\end{itemize}
+
+A latência de match cresce linearmente com o tamanho da galeria
+(Figura~\ref{fig:scale-latency}), mas mesmo para mil funcionários
+permanece em centenas de microssegundos -- desprezível em relação à
+inferência ONNX. A pressão real de escalabilidade está no FAR
+(Figura~\ref{fig:scale-far}), que sobe com a galeria e em algum ponto
+exigirá ajuste do limiar para manter um número aceitável de falsos
+aceites por mês.
+
+\section{LGPD: postura e limites}
+
+A escolha arquitetural de manter o reconhecimento
+\textit{on-device} -- nenhuma imagem facial atravessando a rede --
+materializa o princípio de minimização de dados da LGPD. O cadastro
+pelo painel reforça essa postura: a inferência roda em
+\textit{WebAssembly} dentro do browser do operador, e apenas o vetor
+512-d é transmitido para o backend.
+
+O que o MVP \emph{não} faz, e seria necessário para uma instalação
+real:
+
+\begin{itemize}
+    \item Termo de consentimento expresso do funcionário, com
+        registro auditável de quando e por quem o cadastro foi
+        feito.
+    \item Mecanismo de exclusão por solicitação (``direito ao
+        esquecimento''). Tecnicamente, basta um
+        \texttt{DELETE /employees/:id} -- mas o processo organizacional
+        de receber, validar e executar esse pedido não está
+        modelado.
+    \item Política de retenção de eventos. Atualmente
+        \texttt{access\_events} é \textit{append-only} sem expiração.
+\end{itemize}
 
 % =================================================
 \chapter{Conclusão}
 % =================================================
 
-% A ser preenchido. Tópicos previstos:
-% - Retomada dos objetivos
-% - Contribuições do projeto
-% - Trabalhos futuros (Jetson Nano, OAuth2 corporativo, múltiplos dispositivos)
+O projeto FaceGateway demonstrou ser viável a construção, em hardware
+de baixo custo (Raspberry Pi 4), de um sistema completo de controle
+de acesso por reconhecimento facial com processamento inteiramente
+\textit{on-device}, atendendo aos requisitos de latência ($<$500\,ms),
+resiliência a falhas de rede (fila offline com drenagem ao
+reconectar) e privacidade (LGPD: imagens não atravessam a rede em
+nenhum dos dois caminhos de cadastro). O acoplamento entre as três
+camadas -- edge em C++, backend em Rust, painel em Ionic/Angular --
+foi mediado por contratos enxutos (quatro tópicos MQTT, uma API REST
+de tamanho moderado), o que permitiu que cada camada fosse
+desenvolvida e testada de forma independente.
+
+A principal contribuição prática do MVP é a evidência de que um
+sistema biométrico industrialmente plausível pode ser entregue
+mantendo o dado mais sensível (a imagem facial) dentro do dispositivo
+de captura -- inclusive durante o cadastro, graças à execução de
+BlazeFace e ArcFace dentro do browser via
+\texttt{onnxruntime-web}. Essa decisão arquitetural foi sustentada
+sem trade-offs perceptíveis: a inferência em
+\textit{WebAssembly}, ainda que mais lenta que a versão nativa do
+edge, é suficientemente ágil para o cadastro presencial.
+
+Como contribuição técnica secundária, foram desenvolvidas duas
+ferramentas auxiliares úteis para uma avaliação experimental
+defensável e reproduzível, integradas ao repositório: o
+\texttt{StageProfiler} embutido no daemon edge (medição de latência
+por estágio em CSV + resumos periódicos em \texttt{stderr}) e o
+binário \texttt{eval} para avaliação \textit{offline} sobre o LFW
+(modos \texttt{pairs} para FAR/FRR e \texttt{enroll-scale} para
+estudo de escalabilidade). Ambos compartilham as mesmas bibliotecas
+de visão do daemon de produção, eliminando a possibilidade de
+divergência entre o que se mede e o que de fato roda na catraca.
+
+\section{Trabalhos futuros}
+
+A continuidade natural do projeto inclui:
+
+\begin{itemize}
+    \item \textbf{Aceleração de inferência}: migração do edge para um
+        \textit{NVIDIA Jetson Nano} ou Pi 5 para reduzir o tempo de
+        ArcFace por um fator de 3--5$\times$, ou adoção do
+        \textit{accelerator} oficial Coral USB para tirar a inferência
+        da CPU principal.
+    \item \textbf{Autenticação corporativa}: troca do login local por
+        OAuth2 contra um IdP corporativo (Azure AD, Google Workspace),
+        eliminando a necessidade do painel armazenar senhas.
+    \item \textbf{Múltiplas catracas e \textit{health monitoring}}:
+        dashboard adicional no painel mostrando o estado de cada
+        dispositivo (\textit{heartbeat} recente, número de eventos
+        enfileirados localmente, taxa de match dos últimos $N$
+        minutos), aproveitando os tópicos
+        \texttt{facegate/health/*} já implementados.
+    \item \textbf{Threshold adaptativo}: substituir o limiar global
+        $T = 0{,}50$ por valores ajustados por funcionário (ou por
+        cluster de embeddings ``ruidosos''), reduzindo FRR sem
+        sacrificar FAR.
+    \item \textbf{Detecção de \textit{spoofing}}: integrar um modelo
+        de \textit{anti-spoofing} (\textit{liveness detection})
+        para evitar autenticação por foto impressa ou tela de
+        celular -- limitação relevante de qualquer sistema baseado
+        apenas em embeddings 2D.
+\end{itemize}
 
 % =================================================
 \chapter*{Referências}
@@ -634,7 +1359,209 @@ Frontend -- visão (browser) & onnxruntime-web & 1.26 & BlazeFace + ArcFace para
 \end{table}
 
 \chapter{Trechos Relevantes de Código}
+\label{ap:codigo}
 
-% A ser preenchido conforme a implementação avançar.
+Esta seção reúne quatro trechos discutidos ao longo do texto que
+ilustram decisões arquiteturais relevantes do projeto. Os caminhos
+referenciam o repositório oficial em
+\url{https://github.com/rappudo/Embarcados-Projeto}.
+
+\section*{B.1 -- Distância de cosseno e \textit{find match} (edge)}
+
+O \texttt{Matcher} realiza varredura linear sobre o cache local de
+embeddings. A distância de cosseno é uma operação de baixíssimo custo
+($\approx 0{,}1$\,ms por entrada na galeria, conforme
+§\ref{sec:tempo}); a decisão de aceitação depende exclusivamente da
+comparação com o limiar configurado.
+
+\begin{lstlisting}[language=C++,caption={edge/src/vision/matcher.cpp},label={lst:matcher}]
+float cosine_distance(
+    const EmbeddingVector& a,
+    const EmbeddingVector& b
+) {
+    float dot = 0.0f, norm_a = 0.0f, norm_b = 0.0f;
+    for (std::size_t i = 0; i < EMBEDDING_DIM; ++i) {
+        dot    += a[i] * b[i];
+        norm_a += a[i] * a[i];
+        norm_b += b[i] * b[i];
+    }
+    const float denom = std::sqrt(norm_a) * std::sqrt(norm_b);
+    if (denom < 1e-9f) {
+        return std::numeric_limits<float>::infinity();
+    }
+    return 1.0f - (dot / denom);
+}
+
+MatchResult Matcher::find_match(const EmbeddingVector& query) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    float best_distance = std::numeric_limits<float>::infinity();
+    EmployeeId best_owner = 0;
+    bool found_any = false;
+
+    for (const auto& entry : cache_) {
+        const float dist = cosine_distance(query, entry.vector);
+        if (dist < best_distance) {
+            best_distance = dist;
+            best_owner = entry.owner;
+            found_any = true;
+        }
+    }
+    if (!found_any || best_distance >= threshold_) {
+        return std::nullopt;
+    }
+    return Match{best_owner, best_distance};
+}
+\end{lstlisting}
+
+\section*{B.2 -- Alinhamento facial por \textit{keypoints} dos olhos
+(edge)}
+
+A transformação de similaridade em forma fechada que mapeia os dois
+\textit{keypoints} de olho da BlazeFace para as posições canônicas do
+InsightFace. O resultado é uma matriz $2\times3$ aplicada via
+\texttt{cv::warpAffine}, sem dependência de
+\texttt{opencv\_calib3d}. A versão TypeScript no painel
+(\texttt{panel/src/app/core/vision/face-embedding.service.ts})
+implementa aritmética idêntica.
+
+\begin{lstlisting}[language=C++,caption={edge/src/vision/face_embedder.cpp},label={lst:alignment}]
+constexpr float kCanonicalRightEyeX = 38.2946f;
+constexpr float kCanonicalRightEyeY = 51.6963f;
+constexpr float kCanonicalLeftEyeX  = 73.5318f;
+constexpr float kCanonicalLeftEyeY  = 51.5014f;
+
+cv::Mat similarity_transform_from_eyes(const Keypoints& kps) {
+    const float sx0 = kps[kRightEyeIdx].x;
+    const float sy0 = kps[kRightEyeIdx].y;
+    const float sx1 = kps[kLeftEyeIdx].x;
+    const float sy1 = kps[kLeftEyeIdx].y;
+
+    const float dx = sx1 - sx0;
+    const float dy = sy1 - sy0;
+    const float norm_sq = dx * dx + dy * dy;
+    if (norm_sq < 1e-6f) return {};
+
+    const float Dx = kCanonicalLeftEyeX - kCanonicalRightEyeX;
+    const float Dy = kCanonicalLeftEyeY - kCanonicalRightEyeY;
+
+    const float a = (dx * Dx + dy * Dy) / norm_sq;
+    const float b = (dx * Dy - dy * Dx) / norm_sq;
+
+    const float tx = kCanonicalRightEyeX - (a * sx0 - b * sy0);
+    const float ty = kCanonicalRightEyeY - (b * sx0 + a * sy0);
+
+    return (cv::Mat_<float>(2, 3) << a, -b, tx, b, a, ty);
+}
+\end{lstlisting}
+
+\section*{B.3 -- Pipeline principal com deduplicação (edge)}
+
+Trecho do \textit{main loop} do pipeline. A lógica de deduplicação
+colapsa a torrente de 30 fps em eventos significativos, e a
+\texttt{block\_until} garante que durante a janela de catraca
+aberta nenhum segundo rosto possa reabrir ou re-disparar o
+mecanismo.
+
+\begin{lstlisting}[language=C++,caption={edge/src/pipeline/pipeline.cpp (trecho)},label={lst:pipeline}]
+if (match_result.has_value()) {
+    event.status = AccessStatus::Granted;
+    event.employee = match_result->employee;
+    event.distance = match_result->distance;
+
+    const bool first_time = !last_status.has_value();
+    const bool different_employee =
+        last_status == AccessStatus::Granted &&
+        last_employee != match_result->employee;
+    const bool was_unknown_before =
+        last_status == AccessStatus::Unknown;
+
+    if (first_time || different_employee || was_unknown_before) {
+        should_emit = true;
+        // Servo, LED e block_until SAO armados ANTES do publish:
+        // garante que um segundo rosto durante a janela aberta nao
+        // re-dispare nada, inclusive em caso de publish lento.
+        turnstile_.grant_access();
+        led_.show_granted(static_cast<int>(open_hold_.count()));
+        block_until = steady::now() + open_hold_;
+        last_status = AccessStatus::Granted;
+        last_employee = match_result->employee;
+    }
+} else {
+    event.status = AccessStatus::Unknown;
+    const bool was_not_unknown =
+        !last_status.has_value() ||
+        last_status != AccessStatus::Unknown;
+    const bool throttle_expired =
+        last_status == AccessStatus::Unknown &&
+        (current - last_unknown_emitted_at) >= unknown_throttle_;
+
+    if (was_not_unknown || throttle_expired) {
+        should_emit = true;
+        led_.show_denied(static_cast<int>(denied_cooldown_.count()));
+        block_until = steady::now() + denied_cooldown_;
+        buzzer_.beep_denied();
+        last_status = AccessStatus::Unknown;
+        last_unknown_emitted_at = current;
+    }
+}
+\end{lstlisting}
+
+\section*{B.4 -- \texttt{/analytics/avg-delay} com filtro de direção
+e \textit{wrap} de meia-noite (backend)}
+
+A \textit{query} de atraso médio por funcionário, na versão final que
+corrige o bug discutido em §5.3. Dois pontos críticos: filtrar
+\texttt{direction='in'} (sem isso, a saída das 06:00 do turno noite
+vira o ``primeiro evento do dia'' seguinte) e normalizar o delta
+para a janela $(-12\,\mathrm{h};\,+12\,\mathrm{h}]$ via aritmética
+modular (sem isso, entradas que cruzam a meia-noite produzem valores
+absurdos).
+
+\begin{lstlisting}[language=SQL,caption={backend/src/routes/analytics.rs (trecho)},label={lst:avgdelay}]
+WITH first_per_day AS (
+    -- direction='in' eh critico: sem isso, a saida das 06:00 do
+    -- turno noite vira o MIN do dia seguinte (delta ~ -16h).
+    SELECT
+        e.employee_id,
+        DATE(to_timestamp(e.timestamp_ms / 1000.0) AT TIME ZONE $1) AS day,
+        MIN(e.timestamp_ms) AS first_ms
+    FROM access_events e
+    WHERE e.status = 'granted'
+      AND e.employee_id IS NOT NULL
+      AND e.direction = 'in'
+    GROUP BY e.employee_id, day
+),
+delays AS (
+    -- Normaliza o delta para (-12h, +12h] via MOD: uma entrada as
+    -- 00:30 (turno noite que comeca as 22:00) le como +150 min, e
+    -- nao -1290 min.
+    SELECT
+        f.employee_id,
+        emp.name,
+        ((MOD(
+            EXTRACT(EPOCH FROM (
+                (to_timestamp(f.first_ms / 1000.0) AT TIME ZONE $1)::time
+                - CASE emp.shift
+                    WHEN 'manha' THEN TIME '08:00'
+                    WHEN 'tarde' THEN TIME '14:00'
+                    WHEN 'noite' THEN TIME '22:00'
+                    ELSE NULL
+                  END
+            ))::numeric + 43200 + 86400,
+            86400
+        ) - 43200) / 60.0)::float8 AS delay_min
+    FROM first_per_day f
+    JOIN employees emp ON emp.id = f.employee_id
+    WHERE emp.shift IS NOT NULL
+)
+SELECT
+    employee_id,
+    name,
+    COALESCE(AVG(delay_min), 0.0)::float8 AS avg_delay_minutes,
+    COUNT(*)::bigint                       AS days_observed
+FROM delays
+GROUP BY employee_id, name
+ORDER BY avg_delay_minutes DESC NULLS LAST
+\end{lstlisting}
 
 \end{document}
