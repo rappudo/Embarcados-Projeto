@@ -167,6 +167,7 @@ Como implementar um sistema de controle de acesso baseado em reconhecimento faci
 Desenvolver um sistema de controle de entrada e saída de funcionários baseado em reconhecimento facial, com processamento embarcado em C++ na Raspberry Pi 4 e backend analítico em Rust, expondo métricas logísticas via painel web e mobile.
 
 \subsection{Objetivos Específicos}
+\label{sec:objetivos-especificos}
 
 \begin{itemize}
     \item Implementar pipeline de visão computacional em C++ capaz de detectar e reconhecer rostos em tempo real, com latência inferior a 500\,ms.
@@ -196,7 +197,7 @@ O reconhecimento facial é uma área da Visão Computacional dedicada à identif
 
 A detecção consiste na identificação da presença de um rosto em uma imagem. Neste projeto, utiliza-se o modelo \textbf{BlazeFace} (Google MediaPipe), exportado no formato ONNX, que além das \textit{bounding boxes} fornece \textit{keypoints} faciais -- posições dos olhos, nariz e boca -- essenciais para o alinhamento do rosto antes da geração do embedding.
 
-A extração de características utiliza o modelo \textbf{ArcFace} (\textit{InsightFace}), treinado com a função de perda \textit{Additive Angular Margin Loss} no dataset MS-Celeb. O modelo gera embeddings de 512 dimensões que capturam as características discriminativas do rosto. A identificação ocorre pela comparação da distância de cosseno entre o embedding extraído e os embeddings previamente armazenados: valores abaixo de um limiar ($\approx 0{,}50$) indicam correspondência positiva.
+A extração de características utiliza o modelo \textbf{ArcFace} (\textit{InsightFace}), treinado com a função de perda \textit{Additive Angular Margin Loss} no dataset MS1MV2 (versão limpa do MS-Celeb-1M divulgada pelos autores do InsightFace). O modelo gera embeddings de 512 dimensões que capturam as características discriminativas do rosto. A identificação ocorre pela comparação da distância de cosseno entre o embedding extraído e os embeddings previamente armazenados: valores abaixo de um limiar ($\approx 0{,}50$) indicam correspondência positiva.
 
 \section{Edge Computing e Sistemas Embarcados}
 
@@ -266,8 +267,7 @@ O módulo embarcado é responsável por toda a inteligência de visão computaci
 O software embarcado é desenvolvido em \textbf{C++17} e utiliza as seguintes bibliotecas:
 
 \begin{itemize}
-    \item \textbf{OpenCV} (\texttt{cv::VideoCapture}): captura de frames via interface CSI ou stream IP;
-    \item \textbf{OpenCV 4.8}: pré-processamento de imagem (resize, color conversion);
+    \item \textbf{OpenCV 4.8}: captura de frames via \texttt{cv::VideoCapture} (interface CSI ou stream IP) e pré-processamento de imagem (resize, color conversion);
     \item \textbf{ONNXRuntime 1.17}: inferência dos modelos BlazeFace e ArcFace;
     \item \textbf{libgpiod $\geq$ 2.0}: controle dos atuadores físicos (servo da catraca, buzzer, LED RGB de status);
     \item \textbf{SQLite3}: cache local de embeddings e fila de eventos offline;
@@ -290,10 +290,13 @@ O banco de dados utilizado é o \textbf{PostgreSQL 16} com a extensão \textbf{p
 A comunicação entre Raspberry e backend utiliza o protocolo \textbf{MQTT com QoS\,1}, com broker \textbf{Eclipse Mosquitto 2.x} rodando no servidor. A estrutura de tópicos é:
 
 \begin{itemize}
-    \item \texttt{facegate/events/access} -- evento de rosto reconhecido;
-    \item \texttt{facegate/events/unknown} -- evento de rosto não reconhecido;
-    \item \texttt{facegate/health} -- \textit{heartbeat} periódico do dispositivo.
+    \item \texttt{facegate/events/access} -- tentativa de acesso (\texttt{granted} ou \texttt{unknown} indicado pelo campo \texttt{status} do payload);
+    \item \texttt{facegate/health/heartbeat} -- \textit{heartbeat} periódico do dispositivo;
+    \item \texttt{facegate/health/fault} -- evento de falha (falha de inferência, câmera offline, etc.);
+    \item \texttt{facegate/sync/embeddings/upsert/+} -- sincronização do backend para os edges, com \texttt{retain=true}; o \textit{wildcard} casa com o \texttt{employee\_id}.
 \end{itemize}
+
+O contrato completo é detalhado em §\ref{sec:contrato-mqtt}.
 
 \section{Painel Web e Mobile}
 
@@ -354,13 +357,13 @@ O semestre compreende 11 semanas de desenvolvimento entre a entrega do escopo (1
 \label{tab:marcos}
 \begin{tabular}{lll}
 \toprule
-Data & Marco & Meta de conclusão \\
+Data & Marco & Entregável esperado \\
 \midrule
 18/03 & Entrega do escopo & Documento de arquitetura \\
 22/04 & Entrega parcial 1 & $\approx$40\% -- Fases 1, 2 e 3 concluídas \\
 13/05 & Entrega parcial 2 & $>$80\% -- Fases 4 e 5 concluídas \\
 27/05 & Entrega final & Sistema integrado e documentado \\
-03/06 & P2 & Avaliação individual \\
+03/06 & P2 & Avaliação individual (prova) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -567,6 +570,7 @@ testes automatizada que executa em \textit{Continuous Integration} a
 cada \textit{push}.
 
 \subsection{Camada embarcada (\texttt{edge/}, C++17)}
+\label{sec:camada-edge}
 
 O daemon \texttt{facegate} é organizado em torno de uma classe
 \texttt{Pipeline} (\texttt{src/pipeline/pipeline.cpp}) que orquestra
@@ -679,6 +683,7 @@ definidos, projetados para minimizar acoplamento e tolerar falhas
 parciais.
 
 \subsection{Contrato MQTT (edge $\leftrightarrow$ backend)}
+\label{sec:contrato-mqtt}
 
 Quatro tópicos com QoS\,1 cobrem todo o tráfego edge $\leftrightarrow$
 backend:
@@ -782,6 +787,7 @@ agora produzem embeddings comparáveis, ponto-a-ponto.
 
 \subsection{Bug do \texttt{/analytics/avg-delay} -- 180 minutos
 adiantado}
+\label{sec:bug-avg-delay}
 
 A primeira versão da \textit{query} de atraso médio agrupava por
 \texttt{(employee\_id, day)} e tomava \texttt{MIN(timestamp\_ms)} sem
@@ -866,6 +872,7 @@ desejada, sem duplicação.
 
 % =================================================
 \chapter{Resultados}
+\label{cap:resultados}
 % =================================================
 
 \section{Desempenho do Modelo}
@@ -998,51 +1005,83 @@ ciclo do pipeline em uma linha CSV com tempos individuais por estágio
 imprime um resumo no \texttt{stderr} a cada 100 ciclos com
 $n$/mean/p50/p95/max por estágio.
 
-A estimativa de orçamento de latência por estágio, com base em
-benchmarks publicados de inferência ONNX em Raspberry Pi 4 ARM Cortex-A72
-com dois \textit{threads} de inferência, é apresentada na
-Tabela~\ref{tab:latencia-budget}. Os números servem de referência
-inicial para validação durante a apresentação, quando o
-\texttt{StageProfiler} produzirá os valores reais para inclusão na
-versão final do relatório.
+A medição foi conduzida diretamente na Raspberry Pi 4 do
+\textit{deployment} de demonstração, com a configuração padrão de
+dois \textit{threads} ONNX, ao longo de $1\,010$ ciclos do
+\textit{main loop} -- mistura de quadros vazios (sem rosto detectado)
+com sequências em que um operador permaneceu diante da câmera. Os
+resultados consolidados estão na Tabela~\ref{tab:latencia-budget} e na
+Figura~\ref{fig:latency-stages}.
 
 \begin{table}[H]
 \centering
-\caption{Orçamento de latência por estágio (estimativa de referência
-em Raspberry Pi 4, 2 \textit{threads} ONNX).}
+\caption{Latência por estágio do pipeline medida em Raspberry Pi 4
+(2 \textit{threads} ONNX, $1\,010$ ciclos).}
 \label{tab:latencia-budget}
-\begin{tabular}{lrl}
+\begin{tabular}{lrrrrr}
 \toprule
-Estágio & Estimativa & Origem da carga \\
+Estágio & $n$ & p50 & p95 & máx & Observação \\
 \midrule
-captura  & $\sim$8\,ms     & \texttt{cv::VideoCapture} sobre USB/CSI \\
-detecção & $\sim$13\,ms    & BlazeFace ONNX ($\sim$530\,KB) \\
-embedding & $\sim$40\,ms   & ArcFace ONNX ($\sim$130\,MB) -- dominante \\
-match     & $\sim$0{,}2\,ms (galeria pequena) & varredura linear $O(N)$, ver §\ref{sec:logistica} \\
-publish   & $\sim$2\,ms (apenas em ciclos com emissão) & serialização JSON + libmosquittopp \\
+captura   & 1010 & 0{,}50\,ms  & 0{,}74\,ms  & 2{,}26\,ms  & \texttt{cv::VideoCapture} sobre CSI \\
+detecção  & 1010 & 13{,}09\,ms & 17{,}26\,ms & 35{,}86\,ms & BlazeFace ONNX ($\sim$530\,KB) \\
+embedding & 71   & 634{,}32\,ms & 666{,}08\,ms & 678{,}89\,ms & ArcFace ONNX ($\sim$130\,MB) -- dominante \\
+match     & 71   & $<$0{,}01\,ms & $<$0{,}01\,ms & $<$0{,}01\,ms & varredura linear, ver §\ref{sec:logistica} \\
+publish   & 19   & 0{,}08\,ms  & 0{,}25\,ms  & 0{,}25\,ms  & serialização JSON + libmosquittopp \\
 \midrule
-\textbf{total} & $\sim$63\,ms & soma típica \\
+\textbf{ciclo vazio (sem rosto)}  & 939 & 13{,}65\,ms & 17{,}74\,ms & 37{,}00\,ms & captura + detecção \\
+\textbf{ciclo com rosto (completo)} & 71  & 648{,}09\,ms & 691{,}79\,ms & 706{,}75\,ms & soma de todos os estágios \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-O valor total estimado fica em torno de $60$ a $70\,$ms -- folga
-significativa em relação à meta de $500\,$ms. O ArcFace é o estágio
-dominante, como esperado para um modelo de 130\,MB executando em CPU
-ARM; estratégias de redução desse custo (quantização \texttt{int8},
-aceleração via Coral USB) ficam registradas como trabalho futuro no
-Capítulo~8.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/out/latency_stages.png}
+    \caption{Distribuição da latência por estágio do pipeline na
+    Raspberry Pi 4 ($1\,010$ ciclos). Boxplots em escala
+    logarítmica; o domínio do ArcFace sobre os demais estágios é
+    evidente.}
+    \label{fig:latency-stages}
+\end{figure}
 
-\textbf{Status da medição}: o instrumento \texttt{StageProfiler} está
-integrado ao daemon \texttt{facegate}, testado
+A medição confirma dois comportamentos distintos do
+\textit{main loop}: (i) em estado de repouso (sem rosto na cena), o
+ciclo executa apenas captura + detecção e roda a $\approx$70\,fps,
+mantendo o sistema sensível à entrada de qualquer pessoa; (ii) quando
+um rosto é detectado, o ciclo completo é dominado pela inferência
+ArcFace, com mediana de $\approx 648\,$ms e p95 de
+$\approx 692\,$ms.
+
+\textbf{A meta original de $500\,$ms (§\ref{sec:objetivos-especificos}) não foi cumprida no
+caminho ``com rosto''.} O custo da inferência ArcFace é o motivo
+único: $\approx 634\,$ms p50 só nesse estágio, contra os outros quatro
+combinados somando menos de $15\,$ms. Este resultado é consistente
+com o porte do modelo ($\sim$130\,MB) e com a CPU disponível
+(ARM Cortex-A72 a 1{,}5\,GHz, 2 \textit{threads}). A meta original
+foi estabelecida assumindo um modelo da família MobileFaceNet
+($\sim$5\,MB), e o \textit{upgrade} para ArcFace -- justificado pelo
+ganho de acurácia documentado em §\ref{sec:desempenho} -- não foi
+acompanhado de uma revisão proporcional do orçamento de latência.
+
+Apesar da meta não ser cumprida, a latência observada continua
+adequada para o caso de uso de uma catraca de controle de entrada:
+$\approx 700\,$ms p95 ainda fica abaixo do limiar de tolerância
+humana percebida ($\approx 1\,$s) para portas controladas, e o
+caminho de repouso a $70\,$fps garante que a sensibilidade à
+aproximação do usuário não é prejudicada. As estratégias para
+recuperar a folga em relação aos $500\,$ms originais (quantização
+\texttt{int8} do ArcFace, aceleração via Coral USB, migração para
+Pi 5 ou Jetson Nano) ficam registradas em
+§\ref{sec:trabalhos-futuros}.
+
+Para reprodução, o instrumento \texttt{StageProfiler} permanece
+integrado ao daemon \texttt{facegate}, com testes unitários
 (\texttt{edge/tests/stage\_profiler\_test.cpp}, 5 casos cobrindo
 formato CSV, estágios pulados e \textit{append} entre execuções) e
-ativável por um par de campos em \texttt{config.toml}. A coleta
-contínua de $\geq 1\,000$ ciclos na Raspberry Pi do
-\textit{deployment} de demonstração está agendada para a janela de
-apresentação. Para reprodução posterior, o procedimento completo
-está descrito em \texttt{edge/apps/eval/README.md} e no script de
-plotagem \texttt{docs/figures/plots.py}.
+ativável por um par de campos em \texttt{config.toml}. O
+procedimento completo de coleta e geração das figuras está descrito
+em \texttt{edge/apps/eval/README.md} e no script
+\texttt{docs/figures/plots.py}.
 
 \subsection{Escalabilidade do match em função da galeria}
 
@@ -1065,9 +1104,9 @@ A curva confirma o comportamento linear esperado: $\approx 199\,\mu$s
 para $N=10$, $1\,203\,\mu$s para $N=50$, $2\,426\,\mu$s para $N=100$,
 $9\,982\,\mu$s para $N=500$ e $18\,305\,\mu$s ($\approx 18\,$ms) para
 $N=1\,000$. Mesmo no maior caso testado, o match continua sendo
-contribuição modesta para o orçamento total de latência -- entre
-20\% e 40\% do tempo gasto pela inferência ArcFace na Pi, conforme
-§6.2. Em termos práticos, o custo do match deixa de ser
+contribuição modesta para o orçamento total de latência -- ainda
+inferior a 3\% do tempo gasto pela inferência ArcFace na Pi medido em
+§\ref{sec:tempo}. Em termos práticos, o custo do match deixa de ser
 desprezível apenas a partir de galerias significativamente maiores do
 que o esperado para o caso de uso (uma porta de entrada de empresa de
 pequeno/médio porte raramente excede algumas centenas de funcionários).
@@ -1095,7 +1134,7 @@ contra \texttt{SELECT}s diretos no PostgreSQL para garantir
 consistência entre o que o painel exibe e o que de fato está no banco
 -- com atenção particular ao tratamento de \textit{timezone}
 (\texttt{America/Sao\_Paulo}) e à normalização do
-\texttt{/analytics/avg-delay} discutida em §5.3.
+\texttt{/analytics/avg-delay} discutida em §\ref{sec:bug-avg-delay}.
 
 As capturas comparando o painel versus a consulta SQL crua para
 três pontos do dia constam no documento de entrega
@@ -1168,23 +1207,31 @@ exigir mudança de limiar).
 
 \section{Atendimento dos objetivos}
 
-Confrontando os resultados apresentados no Capítulo~6 com os
-objetivos específicos enunciados em §1.3, observa-se que o MVP
-entregue cumpre cada um dos itens propostos:
+Confrontando os resultados apresentados no Capítulo~\ref{cap:resultados}
+com os objetivos específicos enunciados em §\ref{sec:objetivos-especificos},
+observa-se que o MVP entregue cumpre a maior parte dos itens propostos
+-- com uma exceção honesta na meta de latência, discutida abaixo:
 
 \begin{itemize}
-    \item \textbf{Latência $<$ 500\,ms}: o orçamento estimado por
-        estágio (Tabela~\ref{tab:latencia-budget}) fica em torno de
-        $60$--$70\,$ms, folga significativa em relação à meta. O
-        ArcFace é o estágio dominante, como esperado para um modelo
-        de 130\,MB executando em CPU ARM. A validação final na
-        Raspberry Pi de demonstração será realizada pela
-        instrumentação \texttt{StageProfiler} descrita em
+    \item \textbf{Latência $<$ 500\,ms (parcialmente atendido)}: o
+        ciclo de detecção em estado de repouso roda em
+        $\approx 14\,$ms (p50), mas o ciclo completo de
+        reconhecimento (com rosto presente) tem mediana de
+        $\approx 648\,$ms e p95 de $\approx 692\,$ms na Raspberry
+        Pi 4 -- estouro de $\approx 30\%$ sobre a meta original. O
+        responsável único é a inferência ArcFace ($\sim$130\,MB,
+        $\approx 634\,$ms p50), cujo custo foi subestimado quando a
+        meta de $500\,$ms foi estabelecida assumindo um modelo da
+        família MobileFaceNet. O \textit{trade-off} favoreceu
+        deliberadamente a acurácia (§\ref{sec:desempenho}); a
+        latência observada permanece adequada à percepção humana
+        para um caso de uso de catraca. Detalhes em
         §\ref{sec:tempo}.
     \item \textbf{Operação offline completa}: a catraca, o buzzer e o
         LED RGB funcionam independentemente do estado da conexão
         MQTT; eventos gerados sem rede são enfileirados em SQLite
-        local e drenados ao reconectar (§3.2 e §5.2).
+        local e drenados ao reconectar pelo \textit{auxiliary loop}
+        descrito em §\ref{sec:camada-edge}.
     \item \textbf{Transmissão MQTT com QoS\,1}: implementada nos quatro
         tópicos do contrato, com mensagens retidas onde apropriado
         (sync de embeddings).
@@ -1299,10 +1346,15 @@ real:
 O projeto FaceGateway demonstrou ser viável a construção, em hardware
 de baixo custo (Raspberry Pi 4), de um sistema completo de controle
 de acesso por reconhecimento facial com processamento inteiramente
-\textit{on-device}, atendendo aos requisitos de latência ($<$500\,ms),
-resiliência a falhas de rede (fila offline com drenagem ao
-reconectar) e privacidade (LGPD: imagens não atravessam a rede em
-nenhum dos dois caminhos de cadastro). O acoplamento entre as três
+\textit{on-device}, atendendo aos requisitos de resiliência a falhas
+de rede (fila offline com drenagem ao reconectar) e privacidade
+(LGPD: imagens não atravessam a rede em nenhum dos dois caminhos de
+cadastro). A meta original de latência inferior a $500\,$ms não foi
+cumprida no caminho de reconhecimento completo -- a inferência
+ArcFace na Raspberry Pi 4 fixa esse tempo em $\approx 650\,$ms p50 --,
+mas o valor observado permanece adequado à percepção humana para o
+caso de uso e foi um \textit{trade-off} consciente em favor da
+acurácia, conforme discutido no Capítulo~\ref{cap:resultados}. O acoplamento entre as três
 camadas -- edge em C++, backend em Rust, painel em Ionic/Angular --
 foi mediado por contratos enxutos (quatro tópicos MQTT, uma API REST
 de tamanho moderado), o que permitiu que cada camada fosse
@@ -1330,6 +1382,7 @@ de visão do daemon de produção, eliminando a possibilidade de
 divergência entre o que se mede e o que de fato roda na catraca.
 
 \section{Trabalhos futuros}
+\label{sec:trabalhos-futuros}
 
 A continuidade natural do projeto inclui:
 
@@ -1471,7 +1524,7 @@ InsightFace. O resultado é uma matriz $2\times3$ aplicada via
 (\texttt{panel/src/app/core/vision/face-embedding.service.ts})
 implementa aritmética idêntica.
 
-\begin{lstlisting}[language=C++,caption={edge/src/vision/face_embedder.cpp},label={lst:alignment}]
+\begin{lstlisting}[language=C++,caption={edge/src/vision/face\_embedder.cpp},label={lst:alignment}]
 constexpr float kCanonicalRightEyeX = 38.2946f;
 constexpr float kCanonicalRightEyeY = 51.6963f;
 constexpr float kCanonicalLeftEyeX  = 73.5318f;
@@ -1557,7 +1610,7 @@ if (match_result.has_value()) {
 e \textit{wrap} de meia-noite (backend)}
 
 A \textit{query} de atraso médio por funcionário, na versão final que
-corrige o bug discutido em §5.3. Dois pontos críticos: filtrar
+corrige o bug discutido em §\ref{sec:bug-avg-delay}. Dois pontos críticos: filtrar
 \texttt{direction='in'} (sem isso, a saída das 06:00 do turno noite
 vira o ``primeiro evento do dia'' seguinte) e normalizar o delta
 para a janela $(-12\,\mathrm{h};\,+12\,\mathrm{h}]$ via aritmética
