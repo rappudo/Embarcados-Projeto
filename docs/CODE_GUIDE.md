@@ -68,20 +68,32 @@ Dado nunca trafega como imagem facial; apenas o vetor 512-d (ArcFace) circula.
 ```
 .
 ├── README.md                       # Setup, modelos ONNX, slides, badge CI, testes
-├── TODO-Apresentacao-27-05.md      # Roadmap específico para apresentação
-├── .env / .env.example             # Variáveis de ambiente (POSTGRES_*, JWT_SECRET, MQTT_*)
+├── .env / .env.example             # Variáveis de ambiente (POSTGRES_*, JWT_SECRET, MQTT_*, CORS_ORIGINS)
+├── docs/                           # Relatório acadêmico, doc de entrega, code guide
+│   ├── Main.tex                    # Relatório acadêmico LaTeX
+│   ├── Entrega.md                  # Documento de entrega (3 seções + checklist)
+│   ├── CODE_GUIDE.md               # Este arquivo
+│   ├── images/                     # Screenshots e fotos da entrega
+│   └── figures/                    # Plotter Python + PNGs de avaliação
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                  # 3 jobs paralelos (backend, panel, edge) + coverage
-├── infra/                          # Docker stack + migrations Postgres
-│   ├── docker-compose.yml          # Postgres (pgvector/pg16) + Mosquitto
-│   ├── mosquitto.conf              # Broker config (anônimo, porta 1883)
+├── infra/                          # Stack docker-compose completo
+│   ├── docker-compose.yml          # Postgres + Mosquitto + backend + Caddy
+│   ├── mosquitto.conf              # Broker config (auth obrigatória + log stdout)
+│   ├── mosquitto_passwords.example # Template — arquivo real é gerado e gitignored
+│   ├── gen_mqtt_passwords.sh       # Gera mosquitto_passwords a partir do .env
+│   ├── Caddyfile                   # Reverse proxy /api/* + SPA estática
+│   ├── seed_demo.sql               # 25 funcionários + 1 semana de eventos sintéticos
+│   ├── deploy/
+│   │   └── EC2.md                  # Runbook AWS Academy completo
 │   └── migrations/                 # SQL aplicado em primeiro boot do volume
 │       ├── 00_init.sql
 │       ├── 01_add_direction.sql
 │       └── 02_upgrade_to_arcface.sql
 ├── backend/                        # Rust (Axum + sqlx + rumqttc + JWT)
 │   ├── Cargo.toml
+│   ├── Dockerfile                  # Multi-stage Rust 1.88 → debian-slim
 │   ├── src/
 │   │   ├── lib.rs                  # expõe módulos para os testes de integração
 │   │   ├── main.rs
@@ -122,6 +134,7 @@ Dado nunca trafega como imagem facial; apenas o vetor 512-d (ArcFace) circula.
 │       └── README.md
 └── panel/                          # Ionic + Angular (PWA admin)
     ├── angular.json, package.json, capacitor.config.ts ...
+    ├── Dockerfile                  # Multi-stage Node build → Caddy static serve
     ├── karma.conf.js               # launcher ChromeHeadlessCI para o CI
     └── src/
         ├── main.ts, polyfills.ts, zone-flags.ts
@@ -532,10 +545,12 @@ Sequência:
 5. `mqtt::start_subscriber(pool, host, port)` retorna
    `(MqttStateHandle, AsyncClient)` — conecta sincronicamente e dispara
    task de polling.
-6. CORS: `tower-http` libera origin `http://localhost:8100` (Ionic dev),
-   métodos GET/POST/PATCH/DELETE/OPTIONS, headers `Any`.
+6. CORS: `tower-http` lê a lista de origins de `CORS_ORIGINS` (env,
+   separada por vírgula; default = dev pair em `localhost`). Métodos
+   GET/POST/PATCH/DELETE/OPTIONS; headers explicitamente listados
+   (`Authorization`, `Content-Type`, `Accept`, `x-requested-with`).
 7. `routes::create_router(...)` monta o `Router` com `AppState` injetado.
-8. `axum::serve` em `0.0.0.0:<SERVER_PORT>`.
+8. `axum::serve` em `[::]:<SERVER_PORT>` (dual-stack IPv4/IPv6).
 
 ### 4.3 `backend/src/config.rs`
 ```rust
@@ -544,7 +559,10 @@ pub struct Config {
     pub jwt_secret: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
+    pub mqtt_username: Option<String>,
+    pub mqtt_password: Option<String>,
     pub server_port: u16,
+    pub cors_origins: Vec<String>,
 }
 impl Config { pub fn from_env() -> Result<Self> { ... } }
 ```
@@ -552,6 +570,12 @@ impl Config { pub fn from_env() -> Result<Self> { ... } }
   português via `anyhow::Context`.
 - `MQTT_HOST` (default `localhost`), `MQTT_PORT` (default `1883`),
   `SERVER_PORT` (default `3000`) são opcionais.
+- `MQTT_USERNAME` / `MQTT_PASSWORD`: opcionais. Ausentes → conecta
+  anônimo (dev local). Em deploy contra broker autenticado (EC2) os
+  dois são obrigatórios — o broker rejeita anônimos.
+- `CORS_ORIGINS`: lista separada por vírgula (default
+  `http://localhost:8100,http://127.0.0.1:8100`). Em produção: aponta
+  para o origin público do painel.
 
 ### 4.4 `backend/src/db.rs`
 ```rust
@@ -770,21 +794,91 @@ faz poll de 10s.
 
 ---
 
-## 5. INFRA — Docker + PostgreSQL + Mosquitto
+## 5. INFRA — Docker + PostgreSQL + Mosquitto + Caddy
+
+O stack de produção sobe quatro serviços coordenados por um único
+`docker-compose.yml`. Para subir o stack inteiro contra a configuração
+de produção: `cd infra && docker compose up -d --build`. Runbook
+completo em `infra/deploy/EC2.md`.
 
 ### 5.1 `infra/docker-compose.yml`
-- Serviço `postgres` — imagem `pgvector/pgvector:pg16`, exposto em 5432.
-  Volumes: `pgdata:/var/lib/postgresql/data`, `./migrations:/docker-entrypoint-initdb.d`
-  (migrations só rodam no **primeiro boot** do volume).
-- Serviço `mosquitto` — `eclipse-mosquitto:2`, exposto em 1883. Volume
-  `./mosquitto.conf` → broker config. Dados/logs em volumes `mqttdata` e
-  `mqttlogs`.
+- **`postgres`** — imagem `pgvector/pgvector:pg16`. Porta bind em
+  `127.0.0.1:5432` (host-local, nunca exposta publicamente). Volumes:
+  `pgdata:/var/lib/postgresql/data`,
+  `./migrations:/docker-entrypoint-initdb.d` (migrations só rodam no
+  **primeiro boot** do volume). Healthcheck via `pg_isready`.
+- **`mosquitto`** — `eclipse-mosquitto:2`, exposto em 1883 ao mundo.
+  Auth obrigatória: bind-mount `./mosquitto.conf` (config) e
+  `./mosquitto_passwords` (password file gerado pelo script
+  `gen_mqtt_passwords.sh`).
+- **`backend`** — buildado pelo Dockerfile em `backend/`. Não expõe
+  porta no host; só `expose: 3000` no Docker network. Recebe creds via
+  variáveis de ambiente lidas do `.env` (`POSTGRES_*`, `JWT_SECRET`,
+  `MQTT_USERNAME`, `MQTT_PASSWORD`, `CORS_ORIGINS`). Volume read-only
+  `../edge/models:/edge/models:ro` para servir BlazeFace/ArcFace via
+  `/api/models/*` para o wizard de cadastro do painel.
+- **`caddy`** — buildado pelo Dockerfile em `panel/` (multi-stage que
+  faz `npm run build` e copia o bundle para a imagem `caddy:2-alpine`).
+  Porta 80 pública; serve a SPA Angular estática e reverse-proxy
+  `/api/*` → `backend:3000`. Configuração em `infra/Caddyfile`.
 
 ### 5.2 `infra/mosquitto.conf`
-Configuração mínima: aceita conexões anônimas na porta 1883 (modo MVP
-sem TLS nem auth).
+- `listener 1883 0.0.0.0` — aceita conexões TCP em todas as
+  interfaces (necessário para a Pi conectar pela internet).
+- `allow_anonymous false` — auth obrigatória.
+- `password_file /mosquitto/config/passwordfile` — bind-mount do
+  `mosquitto_passwords` gerado por script (mode 0644, hashes PBKDF2).
+- `log_dest stdout` — logs vão para `docker compose logs mosquitto`
+  diretamente (em vez de um arquivo dentro do container).
+- `persistence true` — mensagens retidas (sync de embeddings) e queues
+  QoS-1 sobrevivem a reinício do broker.
 
-### 5.3 `infra/migrations/00_init.sql`
+### 5.3 `infra/Caddyfile`
+- `:80 { ... }` — site único na porta 80, sem TLS (AWS Academy não
+  fornece domínio).
+- `handle_path /api/* { reverse_proxy backend:3000 }` — strip do
+  prefixo `/api` e proxy para o backend Rust no Docker network.
+- `handle { root * /srv; try_files {path} /index.html; file_server }`
+  — fallback de SPA: rotas client-side do Angular (e.g. `/dashboard`)
+  caem no `index.html`.
+- `encode gzip` — compressão das respostas estáticas.
+
+### 5.4 `infra/gen_mqtt_passwords.sh`
+Helper que lê `MQTT_USERNAME`/`MQTT_PASSWORD` e
+`EDGE_MQTT_USERNAME`/`EDGE_MQTT_PASSWORD` do `.env` e produz o arquivo
+`infra/mosquitto_passwords` com hashes PBKDF2-SHA512 compatíveis com o
+mosquitto. Usa a própria imagem `eclipse-mosquitto:2` (via `docker run`)
+para invocar o binário `mosquitto_passwd`. Escreve em modo `0644` — o
+processo mosquitto dentro do container roda como UID não-root e precisa
+de leitura.
+
+### 5.5 `infra/deploy/EC2.md`
+Runbook passo-a-passo para provisionar do zero em uma instância EC2
+da AWS Academy: provisionamento da instância e security group,
+instalação do Docker, clonagem do repositório, geração de segredos
+via `openssl rand`, geração do password file via `gen_mqtt_passwords.sh`
+e `docker compose up`. Inclui apêndice de *troubleshooting* para os
+erros mais comuns (containers em *restart loop*, IPs trocados pela
+AWS, bind-mount inode caches).
+
+### 5.6 `backend/Dockerfile`
+Multi-stage:
+- **Builder** (`rust:1.88-bookworm`) — `cargo build --release --bin
+  backend`. Pinned em 1.88 porque o `Cargo.lock` contém crates que
+  exigem rustc $\geq$ 1.88 (e.g. `time`, `home`).
+- **Runtime** (`debian:bookworm-slim`) — instala `ca-certificates` e
+  `libssl3`, copia o binário, cria usuário não-root `facegate`
+  (UID 1001), `ENTRYPOINT ["/usr/local/bin/backend"]`.
+
+### 5.7 `panel/Dockerfile`
+Multi-stage:
+- **Builder** (`node:20-alpine`) — `npm ci && npm run build --
+  --configuration production`. Output em `www/`.
+- **Runtime** (`caddy:2-alpine`) — copia `www/` para `/srv` (caminho
+  esperado pelo Caddyfile). O Caddyfile real é montado pelo
+  `docker-compose.yml`, não copiado para a imagem.
+
+### 5.8 `infra/migrations/00_init.sql`
 - Habilita extensão `vector` (pgvector).
 - Cria `employees(id SERIAL, name TEXT NOT NULL, shift TEXT, created_at TIMESTAMPTZ)`.
   Índice `idx_employees_name`.
@@ -797,12 +891,12 @@ sem TLS nem auth).
   vector vector(128), created_at)`. Política CASCADE distinta dos eventos
   (embeddings são dado pessoal; eventos são audit log).
 
-### 5.4 `infra/migrations/01_add_direction.sql`
+### 5.9 `infra/migrations/01_add_direction.sql`
 Adiciona coluna `direction TEXT NOT NULL DEFAULT 'in' CHECK in ('in', 'out')`
 em `access_events` + índice. `IF NOT EXISTS` para idempotência. Edge ainda
 não publica direction, então o default vale.
 
-### 5.5 `infra/migrations/02_upgrade_to_arcface.sql`
+### 5.10 `infra/migrations/02_upgrade_to_arcface.sql`
 - `TRUNCATE TABLE embeddings` (vetores 128-d do MobileFaceNet são
   matematicamente incompatíveis com 512-d do ArcFace).
 - `ALTER TABLE embeddings ALTER COLUMN vector TYPE vector(512)`.

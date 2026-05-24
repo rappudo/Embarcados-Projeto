@@ -2,7 +2,7 @@
 
 **Disciplina:** Sistemas Embarcados — 7º semestre
 **Data da apresentação:** 27/05/2026
-**Equipe:** Ramon Veloso Vieira · Nícolas · Kaique C. · Vinicius D.
+**Equipe:** Ramon Veloso Vieira · Nícolas Pereira · Kaique Rissato · Vinicius Venancio
 **Repositório:** <https://github.com/rappudo/Embarcados-Projeto>
 
 ---
@@ -13,20 +13,23 @@ FaceGateway é um sistema de controle de acesso por reconhecimento facial
 com processamento **on-device**. Uma Raspberry Pi 4 captura imagem, roda
 detecção + embedding facial localmente, decide pela liberação de uma
 catraca (servo SG90) e publica o evento por MQTT. Um backend em Rust
-persiste os eventos em PostgreSQL + pgvector e expõe API REST para um
-painel Ionic/Angular. **A imagem facial nunca trafega na rede** —
-inferência roda no ponto de captura, e até o cadastro pelo painel
-executa BlazeFace + ArcFace dentro do browser via `onnxruntime-web`,
-enviando apenas o vetor de 512 dimensões.
+hospedado em **EC2 (AWS Academy)** persiste os eventos em PostgreSQL +
+pgvector e expõe API REST para um painel Ionic/Angular. **A imagem
+facial nunca trafega na rede** — inferência roda no ponto de captura, e
+até o cadastro pelo painel executa BlazeFace + ArcFace dentro do
+browser via `onnxruntime-web`, enviando apenas o vetor de 512 dimensões.
 
 Demonstração end-to-end resumida:
 
 1. Cadastro do funcionário pelo painel (foto via webcam → embedding no
-   browser → `POST /employees/:id/embeddings` com o vetor).
-2. Pessoa se posiciona em frente à câmera do Pi.
-3. Edge faz captura → detecção → alinhamento → embedding → busca local.
-4. Match: servo abre 5 s, LED verde, evento publicado por MQTT.
-5. Backend persiste; painel atualiza KPIs e a aba "Não reconhecidos".
+   browser → `POST /api/employees/:id/embeddings` com o vetor).
+2. Backend persiste o embedding e re-publica no tópico MQTT retido
+   `facegate/sync/embeddings/upsert/<id>`; a Pi recebe e atualiza o
+   cache local.
+3. Pessoa se posiciona em frente à câmera do Pi.
+4. Edge faz captura → detecção → alinhamento → embedding → busca local.
+5. Match: servo abre 5 s, LED verde, evento publicado por MQTT.
+6. Backend persiste; painel atualiza KPIs e a aba "Não reconhecidos".
 
 ---
 
@@ -34,7 +37,10 @@ Demonstração end-to-end resumida:
 
 A camada embarcada roda em **C++17** na Raspberry Pi 4 (4 GB) e
 controla todos os atuadores físicos via `libgpiod ≥ 2.0`. O pipeline de
-reconhecimento opera continuamente a ~30 fps:
+reconhecimento opera continuamente a ~30 fps em ciclos vazios; quando
+um rosto é detectado, a inferência ArcFace domina (~650 ms p50 na Pi 4
+com 2 *threads* ONNX). Detalhe completo de latência por estágio em
+§7.2 do relatório acadêmico (`docs/Main.tex`).
 
 ```
 frame → BlazeFace (bbox + 6 keypoints)
@@ -61,8 +67,15 @@ drena a fila em lotes de 50 ao reconectar. Nenhum evento é perdido.
 | Buzzer ativo          | GPIO 27                                          |
 | LED RGB de status     | GPIOs 22 / 23 / 24 (R/G/B), resistor 220–330 Ω por canal |
 
-> **[TODO: FOTO]** Foto do projeto montado — Raspberry Pi + câmera +
-> protoboard com servo, buzzer e LED RGB.
+![Raspberry Pi 4 montada com câmera, servo, buzzer e LED RGB](images/raspberrypi_photo.jpg)
+*Figura 1 — Bancada física: Pi 4, câmera, servo SG90, buzzer e LED RGB
+na protoboard.*
+
+![Saída do daemon `facegate` na Pi após conectar ao broker remoto](images/raspberry_pi_connection_screenshot.png)
+*Figura 2 — Daemon conectado ao broker MQTT na EC2 (`MqttPublisher:
+connected to 32.196.147.237:1883`), embeddings sincronizados do painel
+via `facegate/sync/embeddings/upsert/+`, e linhas `Pipeline: MATCH`
+após o reconhecimento.*
 
 ### Tópicos MQTT
 
@@ -73,8 +86,10 @@ drena a fila em lotes de 50 ao reconectar. Nenhum evento é perdido.
 | `facegate/health/fault`                        | edge → backend | Falha de hardware ou inferência                                          |
 | `facegate/sync/embeddings/upsert/+`            | backend → edge | Sincronização de embeddings vindos do painel (wildcard = `employee_id`)  |
 
-Todos com **QoS 1**; o broker retém mensagens de sync para reconciliação
-de estado quando o Pi reconecta.
+Todos com **QoS 1**. O broker autentica clientes via *username/password*
+(usuários distintos para backend e edge); o tópico de sync é publicado
+com `retain=true` para que um Pi recém-conectado receba imediatamente o
+estado corrente da galeria de funcionários.
 
 ### Software embarcado
 
@@ -140,15 +155,31 @@ internet pública contra o broker autenticado.
 > para o demo; em produção real, basta adicionar `tls { ... }` ao
 > Caddyfile e o broker passa para 8883 com cert auto-emitido.
 
+![Console AWS mostrando a instância EC2 ativa e o security group](images/aws_instance_security_screenshot.png)
+*Figura 3 — Instância `facegate-prod` rodando na AWS Academy, com as
+regras de *inbound* do security group: SSH (22) e backend de debug
+(3000) restritos ao IP do operador; HTTP (80) e MQTT (1883) abertos
+publicamente — a auth do broker é o único gate de fato.*
+
+![docker compose ps na EC2 — quatro containers saudáveis](images/docker_screenshot.png)
+*Figura 4 — Stack em produção: `facegate-db` (Postgres + pgvector,
+healthy), `facegate-broker` (Mosquitto autenticado), `facegate-backend`
+(API Rust) e `facegate-caddy` (reverse proxy + estática do painel).*
+
+![Logs do backend mostrando ingestão de eventos via MQTT](images/backend_logs.png)
+*Figura 5 — Log do backend após boot completo: `Conectado ao
+PostgreSQL`, `MQTT ConnAck — subscriber online`, e o fluxo de
+`access event stored` à medida que a Pi publica.*
+
 **Stack:**
 
-- Rust edition 2024, Axum 0.7, sqlx 0.7 (queries verificadas em compile-time)
+- Rust edition 2024, Axum 0.7, sqlx 0.8 (queries verificadas em compile-time)
 - rumqttc 0.24 (subscriber MQTT assíncrono no runtime Tokio)
 - PostgreSQL 16 + pgvector 0.6
 - jsonwebtoken 9.x (JWT HS256)
 - Docker Compose (Postgres, Mosquitto, backend, Caddy) — sobe inteiro com `docker compose up -d --build`
 
-**Principais endpoints REST:**
+**Principais endpoints REST** (acessíveis como `/api/*` via Caddy):
 
 | Método  | Rota                                     | Descrição                                              |
 |---------|------------------------------------------|--------------------------------------------------------|
@@ -162,21 +193,8 @@ internet pública contra o broker autenticado.
 | GET     | `/analytics/events`                      | Lista paginada de eventos com filtros                  |
 | GET     | `/system/mqtt-status`                    | Saúde da conexão MQTT                                  |
 
-Documentação interativa OpenAPI/Swagger gerada automaticamente a partir
-das anotações `#[utoipa::path]` dos handlers:
-
-- `GET /swagger-ui/` — Swagger UI com "Try it out"
-- `GET /api-docs/openapi.json` — spec OpenAPI 3.1
-
-> **[TODO: SCREENSHOT]** Swagger UI aberta em `/swagger-ui/` mostrando
-> os endpoints.
-
-> **[TODO: SCREENSHOT]** Saída de `docker compose ps` mostrando os dois
-> containers (`facegate-db`, `facegate-broker`) saudáveis.
-
-> **[TODO: SCREENSHOT]** Janela do `psql` (ou `pgAdmin`) com `SELECT *
-> FROM access_events ORDER BY timestamp_ms DESC LIMIT 10;` — mostra
-> eventos recebidos via MQTT.
+Documentação interativa OpenAPI 3.1 gerada automaticamente a partir das
+anotações `#[utoipa::path]` dos handlers: `GET /api/api-docs/openapi.json`.
 
 **Testes automatizados:** 66 testes de integração em Rust contra um
 Postgres real, cobrindo JWT, CRUD, embeddings (round-trip lossless de
@@ -185,7 +203,8 @@ CI a cada push.
 
 **Código fonte:**
 - Backend: <https://github.com/rappudo/Embarcados-Projeto/tree/main/backend>
-- Infra (docker-compose + migrations): <https://github.com/rappudo/Embarcados-Projeto/tree/main/infra>
+- Infra (docker-compose + Caddyfile + scripts): <https://github.com/rappudo/Embarcados-Projeto/tree/main/infra>
+- Runbook de deploy: <https://github.com/rappudo/Embarcados-Projeto/blob/main/infra/deploy/EC2.md>
 - Seed de demonstração (25 funcionários, 1 semana de eventos): <https://github.com/rappudo/Embarcados-Projeto/blob/main/infra/seed_demo.sql>
 
 ---
@@ -209,26 +228,45 @@ aplicativos.
 | Analytics           | Atraso médio por funcionário, heatmap presença × dia/hora              |
 
 **Decisão arquitetural relevante:** o wizard de cadastro carrega
-`blaze.onnx` e `arc.onnx` do endpoint `/models/*` do backend e roda a
-inferência **dentro do browser** via `onnxruntime-web`. A foto bruta
-nunca trafega — só o vetor L2-normalizado de 512 floats vai para a API.
-Isso reforça a postura LGPD do sistema também no caminho de
-administração.
+`blaze.onnx` e `arc.onnx` do endpoint `/api/models/*` do backend (Caddy
+faz reverse proxy) e roda a inferência **dentro do browser** via
+`onnxruntime-web`. A foto bruta nunca trafega — só o vetor
+L2-normalizado de 512 floats vai para a API. Isso reforça a postura
+LGPD do sistema também no caminho de administração.
 
-> **[TODO: SCREENSHOT]** Tela de login.
+![Tela de login do painel](images/login_page.png)
+*Figura 6 — Login com JWT. O `authGuard` redireciona qualquer rota
+privada para esta tela quando o token expira (8 h) ou retorna 401.*
 
-> **[TODO: SCREENSHOT]** Dashboard com os KPIs, o gráfico por hora e o
-> card "Não reconhecidos" (com a lista populada pelo seed de
-> demonstração).
+![Dashboard com KPIs do dia, gráfico horário e não reconhecidos](images/dashboard_page.png)
+*Figura 7 — Dashboard populado pelo seed de demonstração (25
+funcionários, ~280 eventos sintéticos). Cards superiores são KPIs do
+dia; gráfico no centro é fluxo de acessos por hora; card inferior
+agrupa não reconhecidos dos últimos 7 dias com mini bar-chart.*
 
-> **[TODO: SCREENSHOT]** Lista de funcionários em `/cadastro` com pelo
-> menos um funcionário cadastrado.
+![Listagem de funcionários após enrollment](images/employes_page.png)
+*Figura 8 — Tela de cadastro após o enrollment do operador real
+(Ramon, id 27) — visível ao lado das 25 entradas sintéticas do seed.*
 
-> **[TODO: SCREENSHOT]** Wizard de enrollment aberto sobre a tela de
-> cadastro — momento da captura da foto.
+![Wizard de enrollment durante a captura via webcam](images/enrollment_wizard.png)
+*Figura 9 — Wizard de cadastro facial executando BlazeFace + ArcFace
+em `onnxruntime-web` dentro do próprio browser. A imagem nunca é
+enviada à rede; apenas o vetor 512-d resultante.*
 
-> **[TODO: SCREENSHOT]** Modal de exportação CSV com o multi-select e o
-> seletor de período.
+![Download dos modelos ONNX via Caddy](images/models_download_screenshot.png)
+*Figura 10 — DevTools do browser durante o primeiro acesso ao wizard:
+`/api/models/blaze.onnx` (~530 KB) e `/api/models/arc.onnx` (~130 MB)
+servidos estaticamente pelo Caddy a partir de `edge/models/`. Cache do
+service worker reaproveita em sessões subsequentes.*
+
+![Modal de exportação de CSV com multi-select e filtros](images/data_export_page.png)
+*Figura 11 — Tela de exportação. Multi-select de funcionários,
+seletor de período e geração do CSV pronto para Excel/Sheets.*
+
+![CSV exportado aberto no LibreOffice/Excel](images/csv_file_screenshot.png)
+*Figura 12 — Resultado da exportação: UTF-8 com BOM + separador `;`,
+abrindo corretamente em planilhas brasileiras sem mojibake nem
+truncamento de colunas.*
 
 **Testes automatizados:** 88 testes em Jasmine + Karma (Chromium
 headless) — `AuthService` (signals + expiry), HTTP interceptor (anexar
@@ -260,8 +298,10 @@ mapeamento DTO ↔ `Funcionario`. Executam em CI.
   rostos não reconhecidos — permite demonstrar o painel sem o Pi
   conectado.
 
-> **[TODO: SCREENSHOT]** Aba *Actions* do GitHub mostrando um run verde
-> recente com as três suítes passando.
+![Pipeline de CI verde nas três suítes](images/cicd_screenshot.png)
+*Figura 13 — Aba *Actions* do GitHub mostrando um run recente do
+workflow `ci` em verde: as três suítes (edge / backend / painel)
+passando em paralelo no mesmo push.*
 
 ---
 
@@ -269,20 +309,20 @@ mapeamento DTO ↔ `Funcionario`. Executam em CI.
 
 | Requisito                                                     | Status | Onde se evidencia                                  |
 |---------------------------------------------------------------|:------:|----------------------------------------------------|
-| Dispositivo IoT (microcontrolador embarcado)                  | ✅     | Raspberry Pi 4 — seção 1                           |
+| Dispositivo IoT (microcontrolador embarcado)                  | ✅     | Raspberry Pi 4 — seção 1 + Figura 1                |
 | Sensor de entrada                                             | ✅     | Câmera USB/CSI (`cv::VideoCapture`)                |
-| Atuadores físicos                                             | ✅     | Servo SG90, buzzer ativo, LED RGB                  |
-| Comunicação por MQTT                                          | ✅     | 4 tópicos documentados (seção 1)                   |
-| MQTT com autenticação                                         | ✅     | `allow_anonymous false` + password_file no Mosquitto |
-| Back-end                                                      | ✅     | Rust + Axum + Docker (seção 2)                     |
+| Atuadores físicos                                             | ✅     | Servo SG90, buzzer ativo, LED RGB — Figura 1       |
+| Comunicação por MQTT                                          | ✅     | 4 tópicos documentados (seção 1) — Figura 2        |
+| MQTT com autenticação                                         | ✅     | `allow_anonymous false` + password_file — Figura 5 |
+| Back-end                                                      | ✅     | Rust + Axum + Docker (seção 2) — Figuras 4, 5      |
 | Banco de dados                                                | ✅     | PostgreSQL 16 + pgvector 0.6                       |
-| Deploy em nuvem (EC2)                                         | ✅     | Stack docker-compose + runbook `infra/deploy/EC2.md` |
-| Front-end / dashboard                                         | ✅     | Ionic 8 + Angular 20 PWA (seção 3)                 |
-| Autenticação                                                  | ✅     | JWT HS256 + `authGuard`                            |
+| Deploy em nuvem (EC2)                                         | ✅     | Stack docker-compose + runbook — Figuras 3, 4      |
+| Front-end / dashboard                                         | ✅     | Ionic 8 + Angular 20 PWA (seção 3) — Figuras 6–12  |
+| Autenticação                                                  | ✅     | JWT HS256 + `authGuard` — Figura 6                 |
 | Processamento embarcado (edge inteligente)                    | ✅     | BlazeFace + ArcFace rodam on-device em C++/ONNX    |
 | Resiliência offline                                           | ✅     | Fila SQLite + drainer ao reconectar                |
-| Considerações de LGPD / privacidade                           | ✅     | Imagens não trafegam — só embeddings 512-d         |
-| Testes automatizados                                          | ✅     | 198 testes em CI (3 suítes)                        |
+| Considerações de LGPD / privacidade                           | ✅     | Imagens não trafegam — só embeddings 512-d (Fig. 9)|
+| Testes automatizados                                          | ✅     | 198 testes em CI (3 suítes) — Figura 13            |
 | Documentação técnica                                          | ✅     | `Main.tex`, `README.md`, `CODE_GUIDE.md`, `DESIGN.md` |
 | Demonstração executável                                       | ✅     | Seed SQL + `docker compose up -d --build`          |
 

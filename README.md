@@ -101,18 +101,33 @@ frame → BlazeFace (detecção + keypoints)
 
 ### 1. Subir banco e broker
 
+Para *live coding* do backend Rust e do painel Ionic (o que segue nas
+seções 3 e 4), sobe apenas os serviços de infraestrutura — assim você
+roda `cargo run` e `ionic serve` localmente sem conflitar com os
+containers de backend/Caddy:
+
 ```bash
-cp .env.example .env       # ajustar POSTGRES_PASSWORD e JWT_SECRET
+cp .env.example .env       # ajuste POSTGRES_PASSWORD, JWT_SECRET, MQTT_*
 cd infra
-docker compose --env-file ../.env up -d
+ln -s ../.env .env         # docker compose lê .env do diretório do compose
+bash ../infra/gen_mqtt_passwords.sh    # gera mosquitto_passwords (hash PBKDF2)
+docker compose up -d postgres mosquitto
 
 # verificação
 docker exec facegate-db psql -U facegate -d facegate \
   -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
-docker exec facegate-broker mosquitto_pub -t test/ping -m ok && echo "broker ok"
+docker exec facegate-broker mosquitto_pub \
+  -t test/ping -m ok \
+  -u "$MQTT_USERNAME" -P "$MQTT_PASSWORD" && echo "broker ok"
 ```
 
-As migrations em `infra/migrations/` rodam automaticamente no primeiro boot do container.
+As migrations em `infra/migrations/` rodam automaticamente no primeiro boot do container Postgres.
+
+> Para subir o stack inteiro (backend Rust + Caddy + painel estático em
+> containers — sem `cargo run` / `ionic serve` separados) use
+> `docker compose up -d --build`. Painel em `http://localhost/`, API em
+> `http://localhost/api/`. Runbook de produção em
+> [`infra/deploy/EC2.md`](infra/deploy/EC2.md).
 
 ### 2. (Opcional) Popular dados de demonstração
 
@@ -332,7 +347,10 @@ gcovr --root . --filter 'src/' --filter 'apps/' --print-summary build
 
 ## Troubleshooting
 
-**Câmera bloqueada no painel** — `getUserMedia` (a API de webcam do browser) exige HTTPS ou `localhost`. Acessar o painel por IP da LAN sobre HTTP plain falha silenciosamente. Para a demo, usar `ionic serve` em `http://localhost:8100`.
+**Câmera bloqueada no painel** — `getUserMedia` (a API de webcam do browser) exige HTTPS ou `localhost`. Acessar o painel por IP da LAN/EC2 sobre HTTP plain falha silenciosamente. Soluções (mais simples primeiro):
+1. Para dev local, usar `ionic serve` em `http://localhost:8100` (origin seguro por convenção).
+2. Para deploy HTTP em EC2 sem domínio, adicionar a origin em `chrome://flags/#unsafely-treat-insecure-origin-as-secure` no Chrome/Edge antes da demo.
+3. Para produção, terminar TLS via Caddy com um domínio próprio (auto Let's Encrypt) e o problema some.
 
 **Primeira captura no enrollment demora 10–30s** — `arc.onnx` tem ~130 MB e é baixado do backend no primeiro acesso. Abrir o wizard uma vez antes da apresentação para popular o cache do browser.
 

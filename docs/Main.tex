@@ -228,7 +228,7 @@ A decisão de manter o reconhecimento facial exclusivamente \textit{on-device} �
 
 \section{Visão Geral}
 
-O sistema é organizado em três camadas físicas e lógicas independentes: o módulo embarcado (Raspberry Pi 4), o servidor local (notebook do desenvolvedor, substituível por nuvem em produção) e o painel web/mobile. A Figura~\ref{fig:arquitetura} apresenta o diagrama geral da arquitetura.
+O sistema é organizado em três camadas físicas e lógicas independentes: o módulo embarcado (Raspberry Pi 4), o servidor (originalmente um notebook do desenvolvedor; para o \textit{deployment} de demonstração, uma instância EC2 \textit{t3.medium} da AWS Academy) e o painel web/mobile. A Figura~\ref{fig:arquitetura} apresenta o diagrama geral da arquitetura. A topologia de \textit{deployment} em nuvem é detalhada em §\ref{sec:deploy-ec2}.
 
 \begin{figure}[H]
     \centering
@@ -263,6 +263,13 @@ O módulo embarcado é responsável por toda a inteligência de visão computaci
     \item Buzzer ativo para sinalização de acesso negado (via GPIO);
     \item LED RGB de status (verde durante acesso concedido, vermelho durante \textit{cooldown} de acesso negado).
 \end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{images/raspberrypi_photo.jpg}
+    \caption{Bancada física montada para a demonstração: Raspberry Pi 4 com câmera, servo SG90, buzzer ativo e LED RGB de status sobre protoboard.}
+    \label{fig:pi-bancada}
+\end{figure}
 
 O software embarcado é desenvolvido em \textbf{C++17} e utiliza as seguintes bibliotecas:
 
@@ -516,7 +523,7 @@ Jumpers e protoboard & 1 kit & 25,00 \\
 \end{tabular}
 \end{table}
 
-Os custos de software são nulos: todas as tecnologias utilizadas -- Rust, C++, PostgreSQL, Mosquitto, Ionic, Angular e ONNXRuntime -- são de código aberto e gratuitas. O servidor local (notebook) já pertence ao grupo, eliminando custo de infraestrutura. Em um cenário de produção, o backend seria hospedado em nuvem, com custo variável conforme o provedor escolhido.
+Os custos de software são nulos: todas as tecnologias utilizadas -- Rust, C++, PostgreSQL, Mosquitto, Ionic, Angular e ONNXRuntime -- são de código aberto e gratuitas. Para a apresentação, o backend foi hospedado em uma instância \textit{t3.medium} provisionada via AWS Academy (custo coberto pelos créditos acadêmicos); para uso contínuo em produção, o mesmo \textit{stack} \texttt{docker-compose} roda em qualquer VPS \textit{small} (2 vCPU / 4\,GB) com custo da ordem de US\$\,15--30/mês.
 
 % =================================================
 \chapter{Metodologia}
@@ -716,6 +723,13 @@ edge é deliberada: como o broker já retém as mensagens de upsert, uma
 sessão persistente apenas duplicaria o trabalho de re-entrega ao
 reconectar.
 
+Para o \textit{deployment} público em EC2, o broker exige autenticação
+(\texttt{allow\_anonymous false} + \texttt{password\_file} com usuários
+distintos para o backend e para o edge). Cada cliente apresenta
+\textit{username/password} via \texttt{username\_pw\_set} (libmosquittopp)
+ou \texttt{MqttOptions::set\_credentials} (rumqttc). O detalhamento da
+postura de segurança do \textit{deployment} está em §\ref{sec:deploy-ec2}.
+
 \subsection{Contrato HTTP (backend $\leftrightarrow$ painel)}
 
 A API REST expõe três famílias de rotas principais:
@@ -760,6 +774,45 @@ Quando o operador clica em ``capturar foto'', o \textit{wizard}:
 A imagem facial nunca atravessa a rede. O backend valida que o vetor
 tem exatamente 512 \textit{floats} antes de persistir e republicar no
 tópico retido de sync para os edges conectados.
+
+\subsection{\textit{Deployment} em EC2}
+\label{sec:deploy-ec2}
+
+Para a apresentação final, o stack do lado servidor (Postgres,
+Mosquitto, backend Rust, painel estático) foi consolidado em uma
+instância \textit{t3.medium} da AWS Academy, com a Raspberry Pi
+conectando ao broker pela internet pública. Os quatro serviços rodam
+em \textit{containers} Docker coordenados por um único
+\texttt{docker-compose.yml} em \texttt{infra/}; o procedimento
+completo de provisionamento está documentado em
+\texttt{infra/deploy/EC2.md}.
+
+A topologia introduziu três mudanças sobre a versão local:
+
+\begin{itemize}
+    \item \textbf{Caddy como \textit{reverse proxy}}: o painel
+        Angular é servido estaticamente pelo Caddy na porta 80, e
+        todas as chamadas à API são roteadas via \texttt{/api/*} para
+        o backend Rust na rede interna do Docker. O navegador faz
+        portanto requisições \textit{same-origin}, eliminando o
+        \textit{preflight} CORS e dor com configuração de hostname.
+    \item \textbf{Autenticação MQTT obrigatória}: o Mosquitto exposto
+        publicamente é configurado com \texttt{allow\_anonymous false}
+        e um \texttt{password\_file} contendo usuários distintos para
+        o backend e para a Pi. O \textit{script}
+        \texttt{infra/gen\_mqtt\_passwords.sh} gera o arquivo a
+        partir de variáveis no \texttt{.env}.
+    \item \textbf{Banco protegido}: o PostgreSQL aceita conexões
+        apenas de dentro da rede Docker (\texttt{ports: 127.0.0.1:5432:5432}
+        no \textit{host}). Acesso administrativo é feito por SSH
+        \textit{tunnel}.
+\end{itemize}
+
+A ausência de TLS é um \textit{trade-off} consciente: a AWS Academy
+não fornece domínio, e certificados Let's Encrypt exigem
+\textit{hostname}. Para uma instalação produtiva basta adicionar uma
+\textit{stanza} \texttt{tls} ao \texttt{Caddyfile} e migrar o broker
+para a porta 8883 com \textit{certificate} auto-emitido.
 
 \section{Desafios Técnicos}
 

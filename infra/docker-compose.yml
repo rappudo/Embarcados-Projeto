@@ -65,6 +65,11 @@ services:
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       SERVER_PORT: 3000
       CORS_ORIGINS: ${CORS_ORIGINS}
+    volumes:
+      # Backend serve os modelos ONNX a partir de `../edge/models` (relativo
+      # ao cwd do binário, que é /srv no container). Bind-mount expõe os
+      # arquivos para o painel baixar via /api/models/*.onnx.
+      - ../edge/models:/edge/models:ro
     expose:
       - "3000"
 

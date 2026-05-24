@@ -11,12 +11,18 @@ device_id = "rpi-entrance-01"
 # -----------------------------------------------------------------------------
 [vision]
 # Limiar de distância de cosseno para decidir match. Calibrar empiricamente.
-# Valor inicial de referência: 0.45.
-threshold = 0.45
+# Valor inicial de referência para ArcFace: 0.50. (MobileFaceNet, mais
+# antigo, usava ~0.45 — daí o valor histórico em commits anteriores.)
+# Mais alto = mais permissivo; mais baixo = mais estrito.
+threshold = 0.5
 
 # Paths dos modelos ONNX. Relativos ao CWD do processo ou absolutos.
-blazeface_model = "models/blazeface.onnx"
-mobilefacenet_model = "models/mobilefacenet.onnx"
+# Nomes históricos `blazeface.onnx` / `mobilefacenet.onnx` foram trocados
+# por `blaze.onnx` / `arc.onnx` (este último é o ArcFace r100 do
+# InsightFace, embedding 512-d). Variável `mobilefacenet_model` mantida
+# como nome de campo para evitar quebra de configs antigas.
+blazeface_model = "models/blaze.onnx"
+mobilefacenet_model = "models/arc.onnx"
 
 # Número de threads usadas pelo ONNXRuntime.
 # Raspberry Pi 4 tem 4 cores — 2 threads deixa cores livres para o resto do pipeline.
@@ -64,6 +70,11 @@ servo_open_ms = 5000
 # Duração do beep do buzzer em acesso negado/desconhecido, em milissegundos.
 buzzer_beep_ms = 400
 
+# Liga/desliga toda a camada GPIO. Útil para rodar o daemon em máquinas
+# sem GPIO (laptop, container) sem que `libgpiod` falhe na inicialização.
+# false → camera + visão + MQTT funcionam normalmente, atuadores são no-op.
+enabled = true
+
 # -----------------------------------------------------------------------------
 # Reconhecimento — deduplicação de notificações
 # -----------------------------------------------------------------------------
@@ -99,7 +110,9 @@ sqlite_path = "/var/lib/facegate/cache.db"
 # MQTT — comunicação com o backend
 # -----------------------------------------------------------------------------
 [mqtt]
-# Endereço do broker Mosquitto. Usar IP ou hostname resolvível pela Raspberry.
+# Endereço do broker Mosquitto. Para um broker rodando na mesma LAN,
+# use IP local (ex: 192.168.1.100). Para deploy contra a instância EC2
+# documentada em infra/deploy/EC2.md, use o IP público da instância.
 broker_host = "192.168.1.100"
 broker_port = 1883
 
