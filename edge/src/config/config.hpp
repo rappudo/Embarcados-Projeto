@@ -36,6 +36,11 @@ struct RecognitionConfig {
     int idle_reset_seconds;
     int unknown_throttle_seconds;
     int denied_cooldown_ms;
+    // Minimum time (ms) a face must be continuously detected before we run
+    // embedding/matching and emit an event. Prevents premature "unknown"
+    // decisions when only part of the face (e.g. just the eyes) is in frame
+    // as someone approaches the camera. 0 disables the gate.
+    int face_stabilization_ms;
 };
 
 struct StorageConfig {

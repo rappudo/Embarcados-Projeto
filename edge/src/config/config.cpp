@@ -79,10 +79,13 @@ RecognitionConfig parse_recognition(const toml::table& root) {
             (*section)["unknown_throttle_seconds"].value_or(10);
         cfg.denied_cooldown_ms =
             (*section)["denied_cooldown_ms"].value_or(1000);
+        cfg.face_stabilization_ms =
+            (*section)["face_stabilization_ms"].value_or(700);
     } else {
         cfg.idle_reset_seconds = 3;
         cfg.unknown_throttle_seconds = 10;
         cfg.denied_cooldown_ms = 1000;
+        cfg.face_stabilization_ms = 700;
     }
     return cfg;
 }
@@ -212,6 +215,9 @@ void validate(const Config& cfg) {
     }
     if (cfg.recognition.denied_cooldown_ms <= 0) {
         throw std::runtime_error("Config: recognition.denied_cooldown_ms must be positive");
+    }
+    if (cfg.recognition.face_stabilization_ms < 0) {
+        throw std::runtime_error("Config: recognition.face_stabilization_ms must be >= 0");
     }
 
     if (cfg.storage.sqlite_path.empty()) {

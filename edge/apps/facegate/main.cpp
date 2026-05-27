@@ -183,6 +183,7 @@ int main(int argc, char** argv) {
             cfg.recognition.unknown_throttle_seconds,
             cfg.gpio.servo_open_ms,
             cfg.recognition.denied_cooldown_ms,
+            cfg.recognition.face_stabilization_ms,
             cfg.metrics.csv_path,
             cfg.metrics.summary_interval_cycles
         );

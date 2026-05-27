@@ -98,6 +98,13 @@ unknown_throttle_seconds = 10
 # dentro dela.
 denied_cooldown_ms = 1000
 
+# Tempo mínimo (ms) que um rosto precisa estar continuamente detectado
+# antes de rodarmos embedding/matching e emitirmos qualquer evento. Evita
+# decisões prematuras de "desconhecido" quando só parte do rosto (ex: os
+# olhos) está em quadro enquanto a pessoa se aproxima da câmera. 0
+# desliga a verificação.
+face_stabilization_ms = 700
+
 # -----------------------------------------------------------------------------
 # Armazenamento local
 # -----------------------------------------------------------------------------

@@ -40,6 +40,7 @@ Pipeline::Pipeline(
     int unknown_throttle_seconds,
     int open_hold_ms,
     int denied_cooldown_ms,
+    int face_stabilization_ms,
     std::string metrics_csv_path,
     int metrics_summary_interval_cycles
 )
@@ -57,7 +58,8 @@ Pipeline::Pipeline(
       idle_reset_(idle_reset_seconds),
       unknown_throttle_(unknown_throttle_seconds),
       open_hold_(open_hold_ms),
-      denied_cooldown_(denied_cooldown_ms) {
+      denied_cooldown_(denied_cooldown_ms),
+      face_stabilization_(face_stabilization_ms) {
     if (!metrics_csv_path.empty() || metrics_summary_interval_cycles > 0) {
         profiler_ = std::make_unique<StageProfiler>(
             std::move(metrics_csv_path), metrics_summary_interval_cycles
@@ -140,6 +142,14 @@ void Pipeline::main_loop() {
     // second face can't re-trigger anything until the window closes.
     steady::time_point block_until{};
 
+    // Stabilization streak: a face must be continuously detected for
+    // face_stabilization_ before embedding/matching/emit. Absorbs short
+    // detector hiccups (single missed frames) via a small grace window so
+    // a flicker doesn't restart the streak.
+    steady::time_point streak_start{};
+    steady::time_point last_detect_at{};
+    constexpr auto kStreakGapGrace = std::chrono::milliseconds(300);
+
     while (!stop_.load()) {
         const auto loop_start = steady::now();
         if (loop_start < block_until) {
@@ -168,6 +178,25 @@ void Pipeline::main_loop() {
         const auto t_detect_end = steady::now();
         sample.detect = duration_cast<microseconds>(t_detect_end - t_detect_start);
         if (!detection_opt) {
+            if (profiler_) profiler_->record(sample);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+
+        // Stabilization gate: skip embedding/matching until a face has been
+        // continuously detected for face_stabilization_. Avoids premature
+        // "unknown" decisions on partial faces (e.g. eyes only) during the
+        // approach to the camera.
+        const auto detect_time = t_detect_end;
+        const bool new_streak =
+            streak_start == steady::time_point{} ||
+            (detect_time - last_detect_at) > kStreakGapGrace;
+        if (new_streak) {
+            streak_start = detect_time;
+        }
+        last_detect_at = detect_time;
+        if (face_stabilization_.count() > 0 &&
+            (detect_time - streak_start) < face_stabilization_) {
             if (profiler_) profiler_->record(sample);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;

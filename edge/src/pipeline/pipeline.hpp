@@ -37,6 +37,7 @@ public:
         int unknown_throttle_seconds,
         int open_hold_ms,
         int denied_cooldown_ms,
+        int face_stabilization_ms,
         std::string metrics_csv_path,
         int metrics_summary_interval_cycles
     );
@@ -70,6 +71,7 @@ private:
     std::chrono::seconds unknown_throttle_;
     std::chrono::milliseconds open_hold_;
     std::chrono::milliseconds denied_cooldown_;
+    std::chrono::milliseconds face_stabilization_;
 
     std::atomic<bool> stop_{false};
     std::mutex stop_mutex_;
