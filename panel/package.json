@@ -28,7 +28,7 @@
     "@capacitor/status-bar": "8.0.1",
     "@ionic/angular": "^8.0.0",
     "echarts": "^6.1.0",
-    "ionicons": "^7.0.0",
+    "ionicons": "^8.0.13",
     "ngx-echarts": "^20.0.0",
     "onnxruntime-web": "^1.26.0",
     "rxjs": "~7.8.0",
