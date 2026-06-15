@@ -20,7 +20,7 @@ thiserror = "1"
 anyhow = "1"
 sha2 = "0.11.0"
 pgvector = { version = "^0.4", features = ["sqlx"] }
-tower-http = { version = "^0.5", features = ["cors", "fs"] }
+tower-http = { version = "^0.6", features = ["cors", "fs"] }
 # OpenAPI / Swagger UI. The spec is generated at compile time from
 # `#[derive(ToSchema)]` on the DTOs and `#[utoipa::path(...)]` on the
 # handlers. `axum` feature on utoipa-swagger-ui mounts the UI as a
